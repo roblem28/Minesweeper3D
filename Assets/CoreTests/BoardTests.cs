@@ -69,6 +69,51 @@ namespace Minesweeper3D.CoreTests
             Assert.AreEqual(0, board.GetCount(new Coord3(1, 1, 1)));
         }
 
+
+        [Test]
+        public void Counters_Initialized_FromBoardSetup()
+        {
+            var mines = new[] { new Coord3(0, 0, 0), new Coord3(1, 1, 1) };
+            var board = new Board(3, mines);
+
+            Assert.AreEqual(27, board.TotalCells);
+            Assert.AreEqual(2, board.TotalMines());
+            Assert.AreEqual(25, board.TotalSafeCells);
+            Assert.AreEqual(0, board.RevealedSafeCount);
+            Assert.AreEqual(0, board.RevealedTotalCount);
+            Assert.AreEqual(27, board.HiddenCount);
+            Assert.AreEqual(25, board.SafeLeft);
+        }
+
+        [Test]
+        public void Counters_RevealSafe_UpdatesSafeAndTotal()
+        {
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(3, mines);
+
+            board.Reveal(new Coord3(2, 2, 2));
+
+            Assert.Greater(board.RevealedSafeCount, 0);
+            Assert.AreEqual(board.RevealedSafeCount, board.RevealedTotalCount);
+            Assert.AreEqual(board.TotalCells - board.RevealedTotalCount, board.HiddenCount);
+            Assert.AreEqual(board.TotalSafeCells - board.RevealedSafeCount, board.SafeLeft);
+        }
+
+        [Test]
+        public void Counters_RevealMine_IncrementsTotalOnly()
+        {
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(3, mines);
+
+            var result = board.Reveal(new Coord3(0, 0, 0));
+
+            Assert.AreEqual(RevealResult.Mine, result);
+            Assert.AreEqual(0, board.RevealedSafeCount);
+            Assert.AreEqual(1, board.RevealedTotalCount);
+            Assert.AreEqual(26, board.HiddenCount);
+            Assert.AreEqual(board.TotalSafeCells, board.SafeLeft);
+        }
+
         // --- Reveal / Flood Fill ---
 
         [Test]
@@ -134,6 +179,67 @@ namespace Minesweeper3D.CoreTests
                 Assert.AreEqual(CellState.Revealed, board.GetState(n),
                     $"Cell {n} adjacent to mine should still be revealed (flood fill reveals numbered cells, just doesn't expand through them)");
             }
+        }
+
+
+        // --- Chord / Double-click ---
+
+        [Test]
+        public void ChordReveal_FlaggedCountMatches_RevealsAdjacentHiddenNonFlagged()
+        {
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(3, mines);
+
+            board.Reveal(new Coord3(1, 1, 1));
+            board.ToggleFlag(new Coord3(0, 0, 0));
+
+            var result = board.ChordReveal(new Coord3(1, 1, 1));
+
+            Assert.AreEqual(RevealResult.Ok, result);
+            foreach (var n in board.GetNeighbors(new Coord3(1, 1, 1)))
+            {
+                if (n == new Coord3(0, 0, 0))
+                {
+                    Assert.AreEqual(CellState.Flagged, board.GetState(n));
+                    continue;
+                }
+
+                Assert.AreEqual(CellState.Revealed, board.GetState(n),
+                    $"Neighbor {n} should be revealed by chord.");
+            }
+        }
+
+        [Test]
+        public void ChordReveal_FlaggedCountMismatch_DoesNothing()
+        {
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(3, mines);
+
+            board.Reveal(new Coord3(1, 1, 1));
+            var target = new Coord3(0, 1, 1);
+
+            var result = board.ChordReveal(new Coord3(1, 1, 1));
+
+            Assert.AreEqual(RevealResult.AlreadyRevealed, result);
+            Assert.AreEqual(CellState.Hidden, board.GetState(target));
+            Assert.AreEqual(GameStatus.Playing, board.Status);
+        }
+
+        [Test]
+        public void ChordReveal_WrongFlagsCanRevealMine_TriggersLoss()
+        {
+            var mines = new[] { new Coord3(0, 0, 0), new Coord3(2, 2, 2) };
+            var board = new Board(3, mines);
+
+            board.Reveal(new Coord3(1, 1, 1));
+
+            board.ToggleFlag(new Coord3(0, 0, 1));
+            board.ToggleFlag(new Coord3(0, 1, 0));
+
+            var result = board.ChordReveal(new Coord3(1, 1, 1));
+
+            Assert.AreEqual(RevealResult.Mine, result);
+            Assert.AreEqual(GameStatus.Lost, board.Status);
         }
 
         // --- Flagging ---
