@@ -126,28 +126,38 @@ namespace Minesweeper3D.Unity
         private void OnGUI()
         {
             int slice = _sliceController != null ? _sliceController.CurrentSlice + 1 : 0;
-            int total = _sliceController != null ? _sliceController.Size : 0;
-
-            // Game status
-            string status;
-            if (Board == null)
-                status = "Click a cell to start";
-            else if (Board.Status == GameStatus.Won)
-                status = "YOU WIN!";
-            else if (Board.Status == GameStatus.Lost)
-                status = "GAME OVER";
-            else
-                status = $"Mines: {mineCount}";
+            int totalSlices = _sliceController != null ? _sliceController.Size : 0;
 
             var big = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
             var small = new GUIStyle(GUI.skin.label) { fontSize = 13 };
 
-            GUI.Label(new Rect(10, 10, 300, 30), $"Slice {slice}/{total}  —  {status}", big);
-            GUI.Label(new Rect(10, 38, 450, 20), "Scroll = slice  |  Ctrl+Scroll = zoom  |  Middle-drag = orbit", small);
-
-            if (Board != null && Board.Status != GameStatus.Playing)
+            if (Board == null)
             {
-                if (GUI.Button(new Rect(10, 62, 100, 28), "Restart"))
+                GUI.Label(new Rect(10, 10, 400, 30), $"Slice {slice}/{totalSlices}  —  Click a cell to start", big);
+                GUI.Label(new Rect(10, 38, 450, 20), "Scroll = slice  |  Ctrl+Scroll = zoom  |  Middle-drag = orbit", small);
+                return;
+            }
+
+            string status;
+            if (Board.Status == GameStatus.Won)
+                status = "YOU WIN!";
+            else if (Board.Status == GameStatus.Lost)
+                status = "GAME OVER";
+            else
+                status = "Playing";
+
+            int safeLeft = Board.TotalSafe - Board.RevealedSafeCount;
+
+            GUI.Label(new Rect(10, 10, 500, 30),
+                $"Slice {slice}/{totalSlices}  —  {status}", big);
+            GUI.Label(new Rect(10, 38, 500, 20),
+                $"Mines: {Board.MineCount}   Flags: {Board.FlagCount}   Safe Left: {safeLeft}", small);
+            GUI.Label(new Rect(10, 56, 450, 20),
+                "Scroll = slice  |  Ctrl+Scroll = zoom  |  Middle-drag = orbit", small);
+
+            if (Board.Status != GameStatus.Playing)
+            {
+                if (GUI.Button(new Rect(10, 80, 100, 28), "Restart"))
                     RestartGame();
             }
         }
