@@ -19,6 +19,7 @@ namespace Minesweeper3D.Core
 
         private int _revealedSafeCount;
         private readonly int _totalSafe;
+        private int _flagCount;
 
         /// <summary>Create a board of given size with mines pre-placed.</summary>
         /// <param name="size">Side length (NxNxN).</param>
@@ -65,6 +66,9 @@ namespace Minesweeper3D.Core
         public int GetCount(Coord3 c) => _counts[FlatIndex(c)];
         private int _mineCount;
         public int MineCount => _mineCount;
+        public int FlagCount => _flagCount;
+        public int RevealedSafeCount => _revealedSafeCount;
+        public int TotalSafe => _totalSafe;
 
         /// <summary>
         /// Reveal a cell. Returns the result.
@@ -101,9 +105,11 @@ namespace Minesweeper3D.Core
             {
                 case CellState.Hidden:
                     _states[idx] = CellState.Flagged;
+                    _flagCount++;
                     return true;
                 case CellState.Flagged:
                     _states[idx] = CellState.Hidden;
+                    _flagCount--;
                     return true;
                 default:
                     return false;
