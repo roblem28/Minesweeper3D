@@ -46,6 +46,7 @@ namespace Minesweeper3D.Unity
 
         // Difficulty buttons
         private Button[] _difficultyButtons = new Button[3];
+        private TextMeshProUGUI _customLabel;
 
         // Hint
         private GameObject _hintButton;
@@ -194,6 +195,7 @@ namespace Minesweeper3D.Unity
                 var btn = CreateButton($"Diff_{labels[i]}", diffPanel.transform, labels[i], () =>
                 {
                     _game.ApplyDifficulty(values[idx]);
+                    SyncSlidersToGame();
                     RefreshDifficultyButtons();
                 });
                 var btnRect = btn.GetComponent<RectTransform>();
@@ -201,6 +203,15 @@ namespace Minesweeper3D.Unity
                 btn.GetComponentInChildren<TextMeshProUGUI>().fontSize = 26;
                 _difficultyButtons[i] = btn.GetComponent<Button>();
             }
+
+            // "Custom" label (shown when sliders don't match any preset)
+            _customLabel = CreateLabel(diffPanel.transform, "CustomLabel", "Custom", 24);
+            _customLabel.color = new Color(0.8f, 0.65f, 0.3f);
+            var customRect = _customLabel.GetComponent<RectTransform>();
+            customRect.sizeDelta = new Vector2(110f, 50f);
+            var customLayout = _customLabel.gameObject.AddComponent<LayoutElement>();
+            customLayout.preferredWidth = 110f;
+
             RefreshDifficultyButtons();
 
             // Hint button
@@ -316,7 +327,9 @@ namespace Minesweeper3D.Unity
 
             _endTime.text = $"Time: {_game.Timer.FormattedTime}";
             _endHints.text = $"Hints Used: {_game.HintsUsed}";
-            _endDifficulty.text = $"Difficulty: {_game.CurrentDifficulty}";
+            _endDifficulty.text = _game.IsCustomGame
+                ? $"Difficulty: Custom ({_game.GridSize}^3, {_game.MineCount} mines)"
+                : $"Difficulty: {_game.CurrentDifficulty}";
         }
 
         private void BuildSettingsPanel(Transform parent)
@@ -376,6 +389,7 @@ namespace Minesweeper3D.Unity
                 _game.RestartWithSettings(gs, mc);
                 _settingsPanel.SetActive(false);
                 _input?.SetEnabled(true);
+                RefreshDifficultyButtons();
             });
 
             // Close button
@@ -475,11 +489,24 @@ namespace Minesweeper3D.Unity
             var activeBg = new Color(0.3f, 0.55f, 0.85f, 0.95f);
             var inactiveBg = new Color(0.25f, 0.25f, 0.30f, 0.9f);
             Difficulty[] values = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard };
+            bool custom = _game.IsCustomGame;
+
             for (int i = 0; i < _difficultyButtons.Length; i++)
             {
                 var img = _difficultyButtons[i].GetComponent<Image>();
-                img.color = values[i] == _game.CurrentDifficulty ? activeBg : inactiveBg;
+                img.color = !custom && values[i] == _game.CurrentDifficulty ? activeBg : inactiveBg;
             }
+
+            _customLabel.gameObject.SetActive(custom);
+        }
+
+        private void SyncSlidersToGame()
+        {
+            _gridSizeSlider.value = _game.GridSize;
+            _gridSizeLabel.text = $"Grid Size: {_game.GridSize}";
+            ClampMineCount();
+            _mineCountSlider.value = _game.MineCount;
+            _mineCountLabel.text = $"Mine Count: {_game.MineCount}";
         }
 
         private void ToggleSettings()
@@ -489,13 +516,7 @@ namespace Minesweeper3D.Unity
             _input?.SetEnabled(!open);
 
             if (open)
-            {
-                _gridSizeSlider.value = _game.GridSize;
-                _mineCountSlider.value = _game.MineCount;
-                _gridSizeLabel.text = $"Grid Size: {_game.GridSize}";
-                _mineCountLabel.text = $"Mine Count: {_game.MineCount}";
-                ClampMineCount();
-            }
+                SyncSlidersToGame();
         }
 
         private void ClampMineCount()

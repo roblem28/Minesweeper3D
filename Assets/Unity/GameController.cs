@@ -20,6 +20,7 @@ namespace Minesweeper3D.Unity
         public int GridSize => gridSize;
         public int MineCount => mineCount;
         public Difficulty CurrentDifficulty { get; private set; } = Difficulty.Medium;
+        public bool IsCustomGame { get; private set; }
 
         private InputManager _inputManager;
         private SliceController _sliceController;
@@ -136,15 +137,20 @@ namespace Minesweeper3D.Unity
             };
             int mines = Mathf.Max(1, Mathf.RoundToInt(size * size * size * density));
             RestartWithSettings(size, mines);
+            IsCustomGame = false; // override after RestartWithSettings sets it
         }
 
         public void RestartGame()
         {
-            ApplyDifficulty(CurrentDifficulty);
+            if (IsCustomGame)
+                RestartWithSettings(gridSize, mineCount);
+            else
+                ApplyDifficulty(CurrentDifficulty);
         }
 
         public void RestartWithSettings(int newGridSize, int newMineCount)
         {
+            IsCustomGame = true;
             gridSize = newGridSize;
             mineCount = newMineCount;
 
