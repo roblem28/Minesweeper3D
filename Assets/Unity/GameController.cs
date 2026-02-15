@@ -29,6 +29,7 @@ namespace Minesweeper3D.Unity
         private bool _firstClick = true;
 
         public TimerController Timer => _timer;
+        public SliceController Slice => _sliceController;
         public int HintsUsed { get; set; }
 
         private void Start()

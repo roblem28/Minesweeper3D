@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -44,6 +46,11 @@ namespace Minesweeper3D.Unity
 
         // Difficulty buttons
         private Button[] _difficultyButtons = new Button[3];
+
+        // Hint
+        private GameObject _hintButton;
+        private TextMeshProUGUI _hintButtonText;
+        private bool _hintCooldown;
 
         // Mobile slice buttons
         private GameObject _mobileSlicePanel;
@@ -195,6 +202,23 @@ namespace Minesweeper3D.Unity
                 _difficultyButtons[i] = btn.GetComponent<Button>();
             }
             RefreshDifficultyButtons();
+
+            // Hint button
+            _hintButton = CreateButton("HintButton", diffPanel.transform, "Hint", OnHintClicked);
+            var hintBtnRect = _hintButton.GetComponent<RectTransform>();
+            hintBtnRect.sizeDelta = new Vector2(120f, 50f);
+            _hintButtonText = _hintButton.GetComponentInChildren<TextMeshProUGUI>();
+            _hintButtonText.fontSize = 26;
+
+            // New Game button
+            var newGameBtn = CreateButton("NewGameButton", diffPanel.transform, "New Game", () =>
+            {
+                _game.RestartGame();
+                RefreshDifficultyButtons();
+            });
+            var ngRect = newGameBtn.GetComponent<RectTransform>();
+            ngRect.sizeDelta = new Vector2(180f, 50f);
+            newGameBtn.GetComponentInChildren<TextMeshProUGUI>().fontSize = 26;
 
             // End-game panel (hidden by default)
             BuildEndPanel(canvas.transform);
@@ -403,6 +427,47 @@ namespace Minesweeper3D.Unity
             // Only show on touch devices
             bool isTouchDevice = UnityEngine.InputSystem.Touchscreen.current != null;
             _mobileSlicePanel.SetActive(isTouchDevice);
+        }
+
+        private void OnHintClicked()
+        {
+            if (_hintCooldown) return;
+            Board board = _game.Board;
+            if (board == null || board.Status != GameStatus.Playing) return;
+
+            var solver = new Solver();
+            var steps = solver.SolveStep(board);
+            var safeStep = steps.FirstOrDefault(s => !s.InferredMine);
+
+            if (safeStep != null && safeStep.AffectedCells.Length > 0)
+            {
+                var coord = safeStep.AffectedCells[0];
+                _game.HintsUsed++;
+                _hintCooldown = true;
+
+                if (coord.Z != _slice.CurrentSlice)
+                    _slice.SetSlice(coord.Z);
+
+                _game.Slice.GetCell(coord).HighlightHint();
+                StartCoroutine(ResetHintCooldown(3f));
+            }
+            else
+            {
+                _hintButtonText.text = "No hints";
+                StartCoroutine(ResetHintText(2f));
+            }
+        }
+
+        private IEnumerator ResetHintCooldown(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            _hintCooldown = false;
+        }
+
+        private IEnumerator ResetHintText(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            _hintButtonText.text = "Hint";
         }
 
         private void RefreshDifficultyButtons()

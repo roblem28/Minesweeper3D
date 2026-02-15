@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using Minesweeper3D.Core;
 
@@ -18,6 +19,7 @@ namespace Minesweeper3D.Unity
         private BoxCollider _collider;
         private MaterialPropertyBlock _propBlock;
         private bool _isActive;
+        private Coroutine _hintCoroutine;
 
         // Shared meshes (created once)
         private static Mesh _cubeMesh;
@@ -274,6 +276,26 @@ namespace Minesweeper3D.Unity
             Color c = _isActive ? ActiveHidden : GhostHidden;
             c.a = alpha;
             ApplyColor(c);
+        }
+
+        // ----- Hint highlight -----
+
+        private static readonly Color HintColor = new Color(1f, 0.9f, 0.2f, 1f);
+
+        public void HighlightHint()
+        {
+            if (_hintCoroutine != null) StopCoroutine(_hintCoroutine);
+            _hintCoroutine = StartCoroutine(HintFlash());
+        }
+
+        private IEnumerator HintFlash()
+        {
+            _renderer.GetPropertyBlock(_propBlock);
+            Color original = _propBlock.GetColor("_BaseColor");
+            ApplyColor(HintColor);
+            yield return new WaitForSeconds(3f);
+            ApplyColor(original);
+            _hintCoroutine = null;
         }
 
         // ----- Helpers -----

@@ -24,6 +24,8 @@ namespace Minesweeper3D.Unity
         public int CurrentSlice => _currentSlice;
         public int Size => _size;
 
+        public CellView GetCell(Coord3 c) => _cells[c.X, c.Y, c.Z];
+
         public void Init(int size, GameController game)
         {
             _size = size;
