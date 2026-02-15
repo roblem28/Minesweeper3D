@@ -571,7 +571,9 @@ namespace Minesweeper3D.Unity
 
             var btn = go.AddComponent<Button>();
             btn.targetGraphic = bg;
+            btn.navigation = new Navigation { mode = Navigation.Mode.None };
             btn.onClick.AddListener(onClick);
+            btn.onClick.AddListener(() => Debug.Log($"[HUD] {name} clicked"));
 
             var textObj = new GameObject("Text");
             textObj.transform.SetParent(go.transform, false);
@@ -584,6 +586,7 @@ namespace Minesweeper3D.Unity
             tmp.fontSize = 30;
             tmp.color = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
+            tmp.raycastTarget = false;
 
             return go;
         }

@@ -71,6 +71,11 @@ namespace Minesweeper3D.Unity
 
         // ===== PC Input =====
 
+        private static bool IsPointerOverUI()
+        {
+            return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+        }
+
         private void HandleMouseKeyboard()
         {
             var mouse = Mouse.current;
@@ -82,6 +87,8 @@ namespace Minesweeper3D.Unity
 
             if (left || right)
             {
+                if (IsPointerOverUI()) return;
+
                 Vector2 pos = mouse.position.ReadValue();
                 if (TryRaycastCell(pos, out Coord3 coord))
                 {
@@ -163,7 +170,7 @@ namespace Minesweeper3D.Unity
 
                 case UnityEngine.InputSystem.TouchPhase.Ended:
                 {
-                    if (!_touchMoved)
+                    if (!_touchMoved && !IsPointerOverUI())
                     {
                         float duration = Time.time - _touchStartTime;
                         if (TryRaycastCell(touch.screenPosition, out Coord3 coord))
