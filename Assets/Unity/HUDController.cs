@@ -134,11 +134,21 @@ namespace Minesweeper3D.Unity
             gameObject.AddComponent<GraphicRaycaster>();
 
             // EventSystem — required for UI buttons/sliders to receive clicks
-            if (FindFirstObjectByType<EventSystem>() == null)
+            var existingES = FindFirstObjectByType<EventSystem>();
+            if (existingES == null)
             {
                 var eventSystemObj = new GameObject("EventSystem");
-                eventSystemObj.AddComponent<EventSystem>();
+                existingES = eventSystemObj.AddComponent<EventSystem>();
                 eventSystemObj.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+            }
+            // Ensure correct input module — InputSystemUIInputModule for New Input System
+            if (existingES.GetComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>() == null)
+            {
+                // Remove legacy module immediately (Destroy is deferred, DestroyImmediate is not)
+                var legacy = existingES.GetComponent<StandaloneInputModule>();
+                if (legacy != null)
+                    DestroyImmediate(legacy);
+                existingES.gameObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
             }
 
             // Top panel
@@ -152,6 +162,7 @@ namespace Minesweeper3D.Unity
 
             var topBg = topPanel.AddComponent<Image>();
             topBg.color = new Color(0f, 0f, 0f, 0.65f);
+            topBg.raycastTarget = false; // Don't block clicks to elements underneath
 
             var topLayout = topPanel.AddComponent<HorizontalLayoutGroup>();
             topLayout.padding = new RectOffset(20, 20, 10, 10);
@@ -247,6 +258,7 @@ namespace Minesweeper3D.Unity
             _controlsHint.text = "LMB: Reveal | RMB: Flag | Scroll: Slice | Ctrl+Scroll: Zoom | MMB: Orbit";
             _controlsHint.fontSize = 22;
             _controlsHint.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
+            _controlsHint.raycastTarget = false;
 
             // Settings button (top-right corner)
             var settingsBtn = CreateButton("SettingsButton", canvas.transform, "Settings", ToggleSettings);
@@ -484,17 +496,23 @@ namespace Minesweeper3D.Unity
             _hintButtonText.text = "Hint";
         }
 
+        private static readonly Color DiffActiveNormal = new Color(0.3f, 0.55f, 0.85f, 0.95f);
+        private static readonly Color DiffActiveHighlighted = new Color(0.5f, 0.75f, 1f, 1f);
+        private static readonly Color DiffActivePressed = new Color(0.2f, 0.45f, 0.75f, 1f);
+
         private void RefreshDifficultyButtons()
         {
-            var activeBg = new Color(0.3f, 0.55f, 0.85f, 0.95f);
-            var inactiveBg = new Color(0.25f, 0.25f, 0.30f, 0.9f);
             Difficulty[] values = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard };
             bool custom = _game.IsCustomGame;
 
             for (int i = 0; i < _difficultyButtons.Length; i++)
             {
-                var img = _difficultyButtons[i].GetComponent<Image>();
-                img.color = !custom && values[i] == _game.CurrentDifficulty ? activeBg : inactiveBg;
+                bool active = !custom && values[i] == _game.CurrentDifficulty;
+                var cb = _difficultyButtons[i].colors;
+                cb.normalColor = active ? DiffActiveNormal : ButtonNormal;
+                cb.highlightedColor = active ? DiffActiveHighlighted : ButtonHighlighted;
+                cb.pressedColor = active ? DiffActivePressed : ButtonPressed;
+                _difficultyButtons[i].colors = cb;
             }
 
             _customLabel.gameObject.SetActive(custom);
@@ -556,8 +574,14 @@ namespace Minesweeper3D.Unity
             tmp.fontSize = fontSize;
             tmp.color = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
+            tmp.raycastTarget = false; // Labels must not intercept button clicks
             return tmp;
         }
+
+        private static readonly Color ButtonNormal = new Color(0.25f, 0.25f, 0.30f, 0.9f);
+        private static readonly Color ButtonHighlighted = new Color(0.45f, 0.45f, 0.50f, 0.95f);
+        private static readonly Color ButtonPressed = new Color(0.15f, 0.15f, 0.20f, 0.95f);
+        private static readonly Color ButtonSelected = new Color(0.35f, 0.35f, 0.40f, 0.9f);
 
         private static GameObject CreateButton(string name, Transform parent, string label, UnityEngine.Events.UnityAction onClick)
         {
@@ -567,13 +591,23 @@ namespace Minesweeper3D.Unity
             rect.sizeDelta = new Vector2(200f, 60f);
 
             var bg = go.AddComponent<Image>();
-            bg.color = new Color(0.25f, 0.25f, 0.30f, 0.9f);
+            bg.color = Color.white; // Button.colors multiplies against Image.color, so use white
 
             var btn = go.AddComponent<Button>();
             btn.targetGraphic = bg;
             btn.navigation = new Navigation { mode = Navigation.Mode.None };
+            btn.transition = Selectable.Transition.ColorTint;
+            btn.colors = new ColorBlock
+            {
+                normalColor = ButtonNormal,
+                highlightedColor = ButtonHighlighted,
+                pressedColor = ButtonPressed,
+                selectedColor = ButtonSelected,
+                disabledColor = new Color(0.2f, 0.2f, 0.2f, 0.5f),
+                colorMultiplier = 1f,
+                fadeDuration = 0.1f,
+            };
             btn.onClick.AddListener(onClick);
-            btn.onClick.AddListener(() => Debug.Log($"[HUD] {name} clicked"));
 
             var textObj = new GameObject("Text");
             textObj.transform.SetParent(go.transform, false);
