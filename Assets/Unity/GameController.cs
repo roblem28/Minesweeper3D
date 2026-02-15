@@ -1,14 +1,11 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using Minesweeper3D.Core;
 
 namespace Minesweeper3D.Unity
 {
     /// <summary>
-    /// Main game orchestrator. Creates a board via Generator on first click,
-    /// wires input (left click = reveal, right click = flag), manages game state.
-    /// All game logic delegated to Core API.
-    /// Raycasts only hit the active slice (ghost colliders are disabled).
+    /// Main game orchestrator. Creates board on first click, manages game state.
+    /// All game logic delegated to Core API. Input comes from InputManager events.
     /// </summary>
     public class GameController : MonoBehaviour
     {
@@ -18,9 +15,13 @@ namespace Minesweeper3D.Unity
         [SerializeField] private int seed = -1; // -1 = random
 
         public Board Board { get; private set; }
+        public int GridSize => gridSize;
+        public int MineCount => mineCount;
 
+        private InputManager _inputManager;
         private SliceController _sliceController;
         private CameraController _cameraController;
+        private HUDController _hudController;
         private bool _firstClick = true;
 
         private void Start()
@@ -28,58 +29,45 @@ namespace Minesweeper3D.Unity
             if (seed < 0)
                 seed = System.Environment.TickCount;
 
+            // Slice controller — builds the NxNxN grid
             var sliceObj = new GameObject("SliceController");
             _sliceController = sliceObj.AddComponent<SliceController>();
             _sliceController.Init(gridSize, this);
 
+            // Camera controller
             var cam = Camera.main;
             if (cam != null)
             {
+                // Dark background for contrast against cubes
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.08f, 0.09f, 0.14f, 1f);
+
                 _cameraController = cam.gameObject.AddComponent<CameraController>();
-                float camDistance = gridSize * 2.5f;
-                _cameraController.Init(Vector3.zero, camDistance);
+                float gridWorldSize = gridSize * SliceController.Spacing;
+                _cameraController.Init(Vector3.zero, gridWorldSize);
             }
             else
             {
                 Debug.LogError("[MineSweeper3D] No MainCamera found!");
             }
 
-            Debug.Log($"[MineSweeper3D] Started — {gridSize}^3 grid, {mineCount} mines, slice {_sliceController.CurrentSlice + 1}/{gridSize}");
-        }
+            // Input manager — handles all PC and mobile input
+            var inputObj = new GameObject("InputManager");
+            _inputManager = inputObj.AddComponent<InputManager>();
+            _inputManager.Init(cam);
 
-        private void Update()
-        {
-            var mouse = Mouse.current;
-            if (mouse == null) return;
+            _inputManager.OnReveal += HandleReveal;
+            _inputManager.OnFlag += HandleFlag;
+            _inputManager.OnSliceChange += HandleSliceChange;
+            _inputManager.OnOrbit += delta => _cameraController?.ApplyOrbit(delta);
+            _inputManager.OnZoom += delta => _cameraController?.ApplyZoom(delta);
 
-            bool left  = mouse.leftButton.wasPressedThisFrame;
-            bool right = mouse.rightButton.wasPressedThisFrame;
-            if (!left && !right) return;
+            // HUD
+            var hudObj = new GameObject("HUDCanvas");
+            _hudController = hudObj.AddComponent<HUDController>();
+            _hudController.Init(this, _sliceController, _inputManager);
 
-            var cam = Camera.main;
-            if (cam == null) return;
-
-            Vector2 pos = mouse.position.ReadValue();
-            Ray ray = cam.ScreenPointToRay(new Vector3(pos.x, pos.y, 0f));
-
-            if (Physics.Raycast(ray, out RaycastHit hit))
-            {
-                var cell = hit.collider.GetComponent<CellView>();
-                if (cell != null)
-                {
-                    Coord3 coord = cell.Coord;
-                    if (left)
-                    {
-                        Debug.Log($"[MineSweeper3D] L-click {coord}");
-                        HandleReveal(coord);
-                    }
-                    else
-                    {
-                        Debug.Log($"[MineSweeper3D] R-click {coord}");
-                        HandleFlag(coord);
-                    }
-                }
-            }
+            Debug.Log($"[MineSweeper3D] Started — {gridSize}^3 grid, {mineCount} mines");
         }
 
         private void HandleReveal(Coord3 coord)
@@ -91,16 +79,14 @@ namespace Minesweeper3D.Unity
             {
                 _firstClick = false;
                 Board = Generator.Generate(gridSize, mineCount, coord, seed);
-                var result = Board.Reveal(coord);
-                Debug.Log($"[MineSweeper3D] First click {coord} → {result}, status={Board.Status}");
-                _sliceController.RefreshAll();
+                Board.Reveal(coord);
+                RefreshUI();
                 return;
             }
 
             var rv = Board.Reveal(coord);
-            Debug.Log($"[MineSweeper3D] Reveal {coord} → {rv}, status={Board.Status}");
             if (rv == RevealResult.Ok || rv == RevealResult.Mine)
-                _sliceController.RefreshAll();
+                RefreshUI();
         }
 
         private void HandleFlag(Coord3 coord)
@@ -108,10 +94,14 @@ namespace Minesweeper3D.Unity
             if (Board == null || Board.Status != GameStatus.Playing)
                 return;
 
-            bool toggled = Board.ToggleFlag(coord);
-            Debug.Log($"[MineSweeper3D] Flag {coord} → toggled={toggled}");
-            if (toggled)
-                _sliceController.RefreshAll();
+            if (Board.ToggleFlag(coord))
+                RefreshUI();
+        }
+
+        private void HandleSliceChange(int direction)
+        {
+            _sliceController.SetSlice(_sliceController.CurrentSlice + direction);
+            _hudController?.Refresh();
         }
 
         public void RestartGame()
@@ -119,46 +109,51 @@ namespace Minesweeper3D.Unity
             Board = null;
             _firstClick = true;
             seed = System.Environment.TickCount;
-            _sliceController.RefreshAll();
-            Debug.Log("[MineSweeper3D] Restarted");
+            RefreshUI();
         }
 
-        private void OnGUI()
+        public void RestartWithSettings(int newGridSize, int newMineCount)
         {
-            int slice = _sliceController != null ? _sliceController.CurrentSlice + 1 : 0;
-            int totalSlices = _sliceController != null ? _sliceController.Size : 0;
+            gridSize = newGridSize;
+            mineCount = newMineCount;
 
-            var big = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
-            var small = new GUIStyle(GUI.skin.label) { fontSize = 13 };
+            // Destroy old grid
+            if (_sliceController != null)
+                Destroy(_sliceController.gameObject);
 
-            if (Board == null)
+            // Rebuild
+            var sliceObj = new GameObject("SliceController");
+            _sliceController = sliceObj.AddComponent<SliceController>();
+            _sliceController.Init(gridSize, this);
+
+            // Update camera framing
+            if (_cameraController != null)
             {
-                GUI.Label(new Rect(10, 10, 400, 30), $"Slice {slice}/{totalSlices}  —  Click a cell to start", big);
-                GUI.Label(new Rect(10, 38, 450, 20), "Scroll = slice  |  Ctrl+Scroll = zoom  |  Middle-drag = orbit", small);
-                return;
+                float gridWorldSize = gridSize * SliceController.Spacing;
+                _cameraController.Init(Vector3.zero, gridWorldSize);
             }
 
-            string status;
-            if (Board.Status == GameStatus.Won)
-                status = "YOU WIN!";
-            else if (Board.Status == GameStatus.Lost)
-                status = "GAME OVER";
-            else
-                status = "Playing";
+            Board = null;
+            _firstClick = true;
+            seed = System.Environment.TickCount;
 
-            int safeLeft = Board.TotalSafe - Board.RevealedSafeCount;
+            _hudController?.Rebind(_sliceController);
+            RefreshUI();
+        }
 
-            GUI.Label(new Rect(10, 10, 500, 30),
-                $"Slice {slice}/{totalSlices}  —  {status}", big);
-            GUI.Label(new Rect(10, 38, 500, 20),
-                $"Mines: {Board.MineCount}   Flags: {Board.FlagCount}   Safe Left: {safeLeft}", small);
-            GUI.Label(new Rect(10, 56, 450, 20),
-                "Scroll = slice  |  Ctrl+Scroll = zoom  |  Middle-drag = orbit", small);
+        private void RefreshUI()
+        {
+            _sliceController.RefreshAll();
+            _hudController?.Refresh();
+        }
 
-            if (Board.Status != GameStatus.Playing)
+        private void OnDestroy()
+        {
+            if (_inputManager != null)
             {
-                if (GUI.Button(new Rect(10, 80, 100, 28), "Restart"))
-                    RestartGame();
+                _inputManager.OnReveal -= HandleReveal;
+                _inputManager.OnFlag -= HandleFlag;
+                _inputManager.OnSliceChange -= HandleSliceChange;
             }
         }
     }
