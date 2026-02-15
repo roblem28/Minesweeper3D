@@ -1,11 +1,10 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Minesweeper3D.Unity
 {
     /// <summary>
     /// Orbit/zoom camera around the grid center.
-    /// Middle-mouse drag to orbit, Ctrl+scroll to zoom.
+    /// Input comes from InputManager events (ApplyOrbit, ApplyZoom).
     /// Starts at an isometric-style angle looking down at the 3D grid.
     /// </summary>
     public class CameraController : MonoBehaviour
@@ -23,10 +22,23 @@ namespace Minesweeper3D.Unity
         private float _azimuth;
         private float _elevation;
 
-        public void Init(Vector3 target, float initialDistance)
+        public void Init(Vector3 target, float gridWorldSize)
         {
             _target = target;
-            _distance = initialDistance;
+
+            // Auto-frame: calculate distance from grid size and camera FOV
+            var cam = GetComponent<Camera>();
+            if (cam != null && cam.fieldOfView > 0f)
+            {
+                float halfFov = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
+                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(halfFov) * 1.3f;
+            }
+            else
+            {
+                _distance = gridWorldSize;
+            }
+            _distance = Mathf.Clamp(_distance, minDistance, maxDistance);
+
             _azimuth = 45f;    // diagonal view
             _elevation = 30f;  // looking down at the cube
             ApplyPosition();
@@ -34,35 +46,19 @@ namespace Minesweeper3D.Unity
 
         private void LateUpdate()
         {
-            HandleOrbit();
-            HandleZoom();
             ApplyPosition();
         }
 
-        private void HandleOrbit()
+        public void ApplyOrbit(Vector2 delta)
         {
-            var mouse = Mouse.current;
-            if (mouse == null || !mouse.middleButton.isPressed) return;
-
-            Vector2 delta = mouse.delta.ReadValue();
             _azimuth += delta.x * orbitSpeed;
             _elevation -= delta.y * orbitSpeed;
             _elevation = Mathf.Clamp(_elevation, 5f, 85f);
         }
 
-        private void HandleZoom()
+        public void ApplyZoom(float delta)
         {
-            var kb = Keyboard.current;
-            if (kb == null) return;
-            if (!kb.leftCtrlKey.isPressed && !kb.rightCtrlKey.isPressed) return;
-
-            var mouse = Mouse.current;
-            if (mouse == null) return;
-
-            float scrollY = mouse.scroll.ReadValue().y;
-            if (Mathf.Abs(scrollY) < 0.01f) return;
-
-            _distance -= Mathf.Sign(scrollY) * zoomSpeed;
+            _distance -= delta * zoomSpeed;
             _distance = Mathf.Clamp(_distance, minDistance, maxDistance);
         }
 
