@@ -29,6 +29,7 @@ namespace Minesweeper3D.Unity
         private bool _firstClick = true;
 
         public TimerController Timer => _timer;
+        public int HintsUsed { get; set; }
 
         private void Start()
         {
@@ -166,6 +167,7 @@ namespace Minesweeper3D.Unity
             _firstClick = true;
             seed = System.Environment.TickCount;
             _timer.ResetTimer();
+            HintsUsed = 0;
 
             _hudController?.Rebind(_sliceController);
             RefreshUI();

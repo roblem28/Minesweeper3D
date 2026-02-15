@@ -26,8 +26,15 @@ namespace Minesweeper3D.Unity
 
         // Bottom
         private TextMeshProUGUI _controlsHint;
-        private GameObject _restartButton;
         private GameObject _settingsPanel;
+
+        // End panel
+        private GameObject _endPanel;
+        private TextMeshProUGUI _endTitle;
+        private TextMeshProUGUI _endTime;
+        private TextMeshProUGUI _endHints;
+        private TextMeshProUGUI _endScore;
+        private TextMeshProUGUI _endDifficulty;
 
         // Settings
         private Slider _gridSizeSlider;
@@ -76,7 +83,7 @@ namespace Minesweeper3D.Unity
                 _mineText.text = $"Mines: {_game.MineCount}";
                 _flagText.text = "Flags: 0";
                 _safeText.text = "";
-                _restartButton.SetActive(false);
+                _endPanel.SetActive(false);
                 return;
             }
 
@@ -89,17 +96,17 @@ namespace Minesweeper3D.Unity
                 case GameStatus.Playing:
                     _statusText.text = "Playing";
                     _statusText.color = Color.white;
-                    _restartButton.SetActive(false);
+                    _endPanel.SetActive(false);
                     break;
                 case GameStatus.Won:
                     _statusText.text = "YOU WIN!";
                     _statusText.color = new Color(0.2f, 0.9f, 0.2f);
-                    _restartButton.SetActive(true);
+                    ShowEndPanel(true);
                     break;
                 case GameStatus.Lost:
                     _statusText.text = "GAME OVER";
                     _statusText.color = new Color(0.9f, 0.2f, 0.2f);
-                    _restartButton.SetActive(true);
+                    ShowEndPanel(false);
                     break;
             }
         }
@@ -189,19 +196,8 @@ namespace Minesweeper3D.Unity
             }
             RefreshDifficultyButtons();
 
-            // Restart button (hidden by default)
-            _restartButton = CreateButton("RestartButton", canvas.transform, "Restart", () =>
-            {
-                _game.RestartGame();
-                RefreshDifficultyButtons();
-            });
-            var restartRect = _restartButton.GetComponent<RectTransform>();
-            restartRect.anchorMin = new Vector2(0.5f, 0.5f);
-            restartRect.anchorMax = new Vector2(0.5f, 0.5f);
-            restartRect.pivot = new Vector2(0.5f, 0.5f);
-            restartRect.sizeDelta = new Vector2(300f, 80f);
-            restartRect.anchoredPosition = Vector2.zero;
-            _restartButton.SetActive(false);
+            // End-game panel (hidden by default)
+            BuildEndPanel(canvas.transform);
 
             // Controls hint (bottom-left)
             var hintObj = new GameObject("ControlsHint");
@@ -231,6 +227,72 @@ namespace Minesweeper3D.Unity
 
             // Mobile slice buttons
             BuildMobileSliceButtons(canvas.transform);
+        }
+
+        private void BuildEndPanel(Transform parent)
+        {
+            _endPanel = new GameObject("EndPanel");
+            _endPanel.transform.SetParent(parent, false);
+
+            var panelRect = _endPanel.AddComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.sizeDelta = new Vector2(500f, 450f);
+            panelRect.anchoredPosition = Vector2.zero;
+
+            var bg = _endPanel.AddComponent<Image>();
+            bg.color = new Color(0.08f, 0.08f, 0.12f, 0.92f);
+
+            var layout = _endPanel.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(30, 30, 30, 30);
+            layout.spacing = 15f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+
+            _endTitle = CreateLabel(_endPanel.transform, "EndTitle", "", 48);
+            _endTime = CreateLabel(_endPanel.transform, "EndTime", "", 32);
+            _endHints = CreateLabel(_endPanel.transform, "EndHints", "", 32);
+            _endScore = CreateLabel(_endPanel.transform, "EndScore", "", 36);
+            _endDifficulty = CreateLabel(_endPanel.transform, "EndDifficulty", "", 28);
+            _endDifficulty.color = new Color(0.7f, 0.7f, 0.7f);
+
+            CreateButton("EndNewGame", _endPanel.transform, "New Game", () =>
+            {
+                _endPanel.SetActive(false);
+                _input?.SetEnabled(true);
+                _game.RestartGame();
+                RefreshDifficultyButtons();
+            });
+
+            _endPanel.SetActive(false);
+        }
+
+        private void ShowEndPanel(bool isWin)
+        {
+            _endPanel.SetActive(true);
+            _input?.SetEnabled(false);
+
+            if (isWin)
+            {
+                _endTitle.text = "YOU WIN!";
+                _endTitle.color = new Color(0.2f, 0.9f, 0.2f);
+                _endScore.gameObject.SetActive(true);
+                _endScore.text = $"Score: {ScoreController.Calculate(_game.GridSize, _game.Timer.ElapsedSeconds, _game.HintsUsed)}";
+            }
+            else
+            {
+                _endTitle.text = "GAME OVER";
+                _endTitle.color = new Color(0.9f, 0.2f, 0.2f);
+                _endScore.gameObject.SetActive(false);
+            }
+
+            _endTime.text = $"Time: {_game.Timer.FormattedTime}";
+            _endHints.text = $"Hints Used: {_game.HintsUsed}";
+            _endDifficulty.text = $"Difficulty: {_game.CurrentDifficulty}";
         }
 
         private void BuildSettingsPanel(Transform parent)
