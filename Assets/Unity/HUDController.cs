@@ -22,6 +22,7 @@ namespace Minesweeper3D.Unity
         private TextMeshProUGUI _mineText;
         private TextMeshProUGUI _flagText;
         private TextMeshProUGUI _safeText;
+        private TextMeshProUGUI _timerText;
 
         // Bottom
         private TextMeshProUGUI _controlsHint;
@@ -54,11 +55,18 @@ namespace Minesweeper3D.Unity
             _slice = newSlice;
         }
 
+        private void Update()
+        {
+            if (_game != null && _game.Timer != null && _timerText != null)
+                _timerText.text = $"Time: {_game.Timer.FormattedTime}";
+        }
+
         public void Refresh()
         {
             if (_slice == null) return;
 
             _sliceText.text = $"Slice {_slice.CurrentSlice + 1}/{_slice.Size}";
+            _timerText.text = $"Time: {_game.Timer.FormattedTime}";
 
             Board board = _game.Board;
             if (board == null)
@@ -143,6 +151,7 @@ namespace Minesweeper3D.Unity
             _mineText = CreateLabel(topPanel.transform, "MineText", "Mines: 10", 32);
             _flagText = CreateLabel(topPanel.transform, "FlagText", "Flags: 0", 32);
             _safeText = CreateLabel(topPanel.transform, "SafeText", "", 32);
+            _timerText = CreateLabel(topPanel.transform, "TimerText", "Time: 00:00", 32);
             _statusText = CreateLabel(topPanel.transform, "StatusText", "Click to start", 32);
 
             // Difficulty buttons row (below top bar)

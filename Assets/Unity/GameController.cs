@@ -25,7 +25,10 @@ namespace Minesweeper3D.Unity
         private SliceController _sliceController;
         private CameraController _cameraController;
         private HUDController _hudController;
+        private TimerController _timer;
         private bool _firstClick = true;
+
+        public TimerController Timer => _timer;
 
         private void Start()
         {
@@ -65,6 +68,10 @@ namespace Minesweeper3D.Unity
             _inputManager.OnOrbit += delta => _cameraController?.ApplyOrbit(delta);
             _inputManager.OnZoom += delta => _cameraController?.ApplyZoom(delta);
 
+            // Timer
+            var timerObj = new GameObject("TimerController");
+            _timer = timerObj.AddComponent<TimerController>();
+
             // HUD
             var hudObj = new GameObject("HUDCanvas");
             _hudController = hudObj.AddComponent<HUDController>();
@@ -83,6 +90,7 @@ namespace Minesweeper3D.Unity
                 _firstClick = false;
                 Board = Generator.Generate(gridSize, mineCount, coord, seed);
                 Board.Reveal(coord);
+                _timer.StartTimer();
                 RefreshUI();
                 return;
             }
@@ -157,6 +165,7 @@ namespace Minesweeper3D.Unity
             Board = null;
             _firstClick = true;
             seed = System.Environment.TickCount;
+            _timer.ResetTimer();
 
             _hudController?.Rebind(_sliceController);
             RefreshUI();
@@ -164,6 +173,9 @@ namespace Minesweeper3D.Unity
 
         private void RefreshUI()
         {
+            if (Board != null && Board.Status != GameStatus.Playing)
+                _timer.StopTimer();
+
             _sliceController.RefreshAll();
             _hudController?.Refresh();
         }
