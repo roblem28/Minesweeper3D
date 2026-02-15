@@ -7,16 +7,19 @@ namespace Minesweeper3D.Unity
     /// Main game orchestrator. Creates board on first click, manages game state.
     /// All game logic delegated to Core API. Input comes from InputManager events.
     /// </summary>
+    public enum Difficulty { Easy, Medium, Hard }
+
     public class GameController : MonoBehaviour
     {
         [Header("Game Settings")]
-        [SerializeField] private int gridSize = 6;
-        [SerializeField] private int mineCount = 10;
+        [SerializeField] private int gridSize = 5;
+        [SerializeField] private int mineCount = 18;
         [SerializeField] private int seed = -1; // -1 = random
 
         public Board Board { get; private set; }
         public int GridSize => gridSize;
         public int MineCount => mineCount;
+        public Difficulty CurrentDifficulty { get; private set; } = Difficulty.Medium;
 
         private InputManager _inputManager;
         private SliceController _sliceController;
@@ -104,12 +107,30 @@ namespace Minesweeper3D.Unity
             _hudController?.Refresh();
         }
 
+        public void ApplyDifficulty(Difficulty diff)
+        {
+            CurrentDifficulty = diff;
+            int size = diff switch
+            {
+                Difficulty.Easy   => 4,
+                Difficulty.Medium => 5,
+                Difficulty.Hard   => 6,
+                _ => 5
+            };
+            float density = diff switch
+            {
+                Difficulty.Easy   => 0.10f,
+                Difficulty.Medium => 0.14f,
+                Difficulty.Hard   => 0.17f,
+                _ => 0.14f
+            };
+            int mines = Mathf.Max(1, Mathf.RoundToInt(size * size * size * density));
+            RestartWithSettings(size, mines);
+        }
+
         public void RestartGame()
         {
-            Board = null;
-            _firstClick = true;
-            seed = System.Environment.TickCount;
-            RefreshUI();
+            ApplyDifficulty(CurrentDifficulty);
         }
 
         public void RestartWithSettings(int newGridSize, int newMineCount)

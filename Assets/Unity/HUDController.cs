@@ -34,6 +34,9 @@ namespace Minesweeper3D.Unity
         private TextMeshProUGUI _gridSizeLabel;
         private TextMeshProUGUI _mineCountLabel;
 
+        // Difficulty buttons
+        private Button[] _difficultyButtons = new Button[3];
+
         // Mobile slice buttons
         private GameObject _mobileSlicePanel;
 
@@ -142,10 +145,46 @@ namespace Minesweeper3D.Unity
             _safeText = CreateLabel(topPanel.transform, "SafeText", "", 32);
             _statusText = CreateLabel(topPanel.transform, "StatusText", "Click to start", 32);
 
+            // Difficulty buttons row (below top bar)
+            var diffPanel = CreatePanel("DifficultyPanel", canvas.transform);
+            var diffRect = diffPanel.GetComponent<RectTransform>();
+            diffRect.anchorMin = new Vector2(0f, 1f);
+            diffRect.anchorMax = new Vector2(1f, 1f);
+            diffRect.pivot = new Vector2(0.5f, 1f);
+            diffRect.sizeDelta = new Vector2(0f, 60f);
+            diffRect.anchoredPosition = new Vector2(0f, -100f);
+
+            var diffLayout = diffPanel.AddComponent<HorizontalLayoutGroup>();
+            diffLayout.padding = new RectOffset(20, 20, 5, 5);
+            diffLayout.spacing = 15f;
+            diffLayout.childAlignment = TextAnchor.MiddleLeft;
+            diffLayout.childControlWidth = false;
+            diffLayout.childControlHeight = true;
+            diffLayout.childForceExpandWidth = false;
+            diffLayout.childForceExpandHeight = false;
+
+            string[] labels = { "Easy", "Medium", "Hard" };
+            Difficulty[] values = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard };
+            for (int i = 0; i < 3; i++)
+            {
+                int idx = i;
+                var btn = CreateButton($"Diff_{labels[i]}", diffPanel.transform, labels[i], () =>
+                {
+                    _game.ApplyDifficulty(values[idx]);
+                    RefreshDifficultyButtons();
+                });
+                var btnRect = btn.GetComponent<RectTransform>();
+                btnRect.sizeDelta = new Vector2(150f, 50f);
+                btn.GetComponentInChildren<TextMeshProUGUI>().fontSize = 26;
+                _difficultyButtons[i] = btn.GetComponent<Button>();
+            }
+            RefreshDifficultyButtons();
+
             // Restart button (hidden by default)
             _restartButton = CreateButton("RestartButton", canvas.transform, "Restart", () =>
             {
                 _game.RestartGame();
+                RefreshDifficultyButtons();
             });
             var restartRect = _restartButton.GetComponent<RectTransform>();
             restartRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -293,6 +332,18 @@ namespace Minesweeper3D.Unity
             // Only show on touch devices
             bool isTouchDevice = UnityEngine.InputSystem.Touchscreen.current != null;
             _mobileSlicePanel.SetActive(isTouchDevice);
+        }
+
+        private void RefreshDifficultyButtons()
+        {
+            var activeBg = new Color(0.3f, 0.55f, 0.85f, 0.95f);
+            var inactiveBg = new Color(0.25f, 0.25f, 0.30f, 0.9f);
+            Difficulty[] values = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard };
+            for (int i = 0; i < _difficultyButtons.Length; i++)
+            {
+                var img = _difficultyButtons[i].GetComponent<Image>();
+                img.color = values[i] == _game.CurrentDifficulty ? activeBg : inactiveBg;
+            }
         }
 
         private void ToggleSettings()
