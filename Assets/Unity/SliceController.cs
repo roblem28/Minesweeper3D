@@ -30,7 +30,7 @@ namespace Minesweeper3D.Unity
         {
             _size = size;
             _game = game;
-            _currentSlice = size / 2;
+            _currentSlice = 0;
             _cells = new CellView[size, size, size];
             BuildGrid();
             CreateFloorPlane();

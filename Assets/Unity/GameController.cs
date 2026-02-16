@@ -154,9 +154,9 @@ namespace Minesweeper3D.Unity
             gridSize = newGridSize;
             mineCount = newMineCount;
 
-            // Destroy old grid
+            // Destroy old grid immediately so no leftover cells remain
             if (_sliceController != null)
-                Destroy(_sliceController.gameObject);
+                DestroyImmediate(_sliceController.gameObject);
 
             // Rebuild
             var sliceObj = new GameObject("SliceController");
