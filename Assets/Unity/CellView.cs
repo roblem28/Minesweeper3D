@@ -29,19 +29,19 @@ namespace Minesweeper3D.Unity
         private static Material _opaqueMat;
         private static Material _ghostMat;
 
-        private const float CubeScale = 0.8f;
-        private const float RevealedScale = 0.7f;
+        private const float CubeScale = 0.6f;
+        private const float RevealedScale = 0.52f;
 
         // --- Active slice colors ---
-        private static readonly Color ActiveHidden   = new Color(0.35f, 0.35f, 0.40f, 1f);
-        private static readonly Color ActiveRevealed = new Color(0.75f, 0.75f, 0.82f, 1f);
-        private static readonly Color ActiveFlagged  = new Color(0.85f, 0.20f, 0.15f, 1f);
+        private static readonly Color ActiveHidden   = new Color(0.44f, 0.44f, 0.44f, 1f);  // #707070 medium gray
+        private static readonly Color ActiveRevealed = new Color(0.75f, 0.75f, 0.75f, 1f);  // #C0C0C0 light gray
+        private static readonly Color ActiveFlagged  = new Color(1.00f, 0.20f, 0.20f, 1f);  // #FF3333 bright red
         private static readonly Color ActiveMine     = new Color(0.08f, 0.08f, 0.08f, 1f);
 
         // --- Ghost wire colors ---
-        private static readonly Color GhostHidden  = new Color(0.50f, 0.50f, 0.55f, 0.08f);
-        private static readonly Color GhostRevealed = new Color(0.30f, 0.40f, 0.80f, 0.12f);
-        private static readonly Color GhostFlagged = new Color(0.80f, 0.20f, 0.10f, 0.15f);
+        private static readonly Color GhostHidden  = new Color(0.25f, 0.25f, 0.25f, 0.10f);  // #404040 alpha 0.1
+        private static readonly Color GhostRevealed = new Color(0.31f, 0.31f, 0.31f, 0.15f); // #505050 alpha 0.15
+        private static readonly Color GhostFlagged = new Color(1.00f, 0.20f, 0.20f, 0.15f);  // bright red ghost
         private static readonly Color GhostMine    = new Color(0.10f, 0.10f, 0.10f, 0.12f);
 
         // --- Count label colors (5-tier) ---

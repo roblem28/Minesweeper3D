@@ -12,14 +12,14 @@ namespace Minesweeper3D.Unity
     public class GameController : MonoBehaviour
     {
         [Header("Game Settings")]
-        [SerializeField] private int gridSize = 5;
-        [SerializeField] private int mineCount = 18;
+        [SerializeField] private int gridSize = 4;
+        [SerializeField] private int mineCount = 6;
         [SerializeField] private int seed = -1; // -1 = random
 
         public Board Board { get; private set; }
         public int GridSize => gridSize;
         public int MineCount => mineCount;
-        public Difficulty CurrentDifficulty { get; private set; } = Difficulty.Medium;
+        public Difficulty CurrentDifficulty { get; private set; } = Difficulty.Easy;
         public bool IsCustomGame { get; private set; }
 
         private InputManager _inputManager;
@@ -49,7 +49,7 @@ namespace Minesweeper3D.Unity
             {
                 // Dark background for contrast against cubes
                 cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = new Color(0.08f, 0.09f, 0.14f, 1f);
+                cam.backgroundColor = new Color(0.10f, 0.10f, 0.18f, 1f);  // #1A1A2E dark navy
 
                 _cameraController = cam.gameObject.AddComponent<CameraController>();
                 float gridWorldSize = gridSize * SliceController.Spacing;
@@ -114,8 +114,14 @@ namespace Minesweeper3D.Unity
 
         private void HandleSliceChange(int direction)
         {
+            HandleSliceChangePublic(direction);
+        }
+
+        public void HandleSliceChangePublic(int direction)
+        {
             _sliceController.SetSlice(_sliceController.CurrentSlice + direction);
             _hudController?.Refresh();
+            _hudController?.FlashSliceIndicator();
         }
 
         public void ApplyDifficulty(Difficulty diff)

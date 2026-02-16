@@ -38,6 +38,17 @@ namespace Minesweeper3D.Unity
         private TextMeshProUGUI _endScore;
         private TextMeshProUGUI _endDifficulty;
 
+        // Slice nav (right side)
+        private TextMeshProUGUI _sliceNavText;
+
+        // Slice flash (center)
+        private TextMeshProUGUI _sliceFlash;
+        private Coroutine _sliceFlashCoroutine;
+
+        // Tutorial overlay
+        private GameObject _tutorialOverlay;
+        private static readonly string TutorialShownKey = "MineSweep3D_TutorialShown";
+
         // Controls hint
         private TextMeshProUGUI _controlsHint;
 
@@ -87,8 +98,17 @@ namespace Minesweeper3D.Unity
             // === END PANEL (hidden) ===
             BuildEndPanel();
 
+            // === SLICE NAV (right side) ===
+            BuildSliceNav();
+
+            // === SLICE FLASH (center) ===
+            BuildSliceFlash();
+
             // === CONTROLS HINT (bottom-left) ===
             BuildControlsHint();
+
+            // === TUTORIAL OVERLAY (one-time) ===
+            BuildTutorialOverlay();
 
             // === DIAGNOSTIC ===
             LogAllButtons();
@@ -152,16 +172,16 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.sizeDelta = new Vector2(130f, 260f);
+            rt.sizeDelta = new Vector2(90f, 220f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
-            bg.color = new Color(0.1f, 0.1f, 0.18f, 0.7f);
+            bg.color = new Color(0.1f, 0.1f, 0.18f, 0.5f);
             bg.raycastTarget = false;
 
             var layout = panel.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(5, 5, 5, 5);
-            layout.spacing = 4f;
+            layout.padding = new RectOffset(4, 4, 4, 4);
+            layout.spacing = 3f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
@@ -178,7 +198,7 @@ namespace Minesweeper3D.Unity
             {
                 int idx = i;
                 string name = labels[i];
-                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(120f, 48f), () =>
+                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(82f, 36f), () =>
                 {
                     Debug.Log($"HUD CLICK: {name}");
                     _game.ApplyDifficulty(diffs[idx]);
@@ -188,7 +208,7 @@ namespace Minesweeper3D.Unity
             }
 
             // Hint button
-            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(120f, 48f), () =>
+            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(82f, 36f), () =>
             {
                 Debug.Log("HUD CLICK: Hint");
                 OnHintClicked();
@@ -197,7 +217,7 @@ namespace Minesweeper3D.Unity
             _hintBtnText = hintGo.GetComponentInChildren<TextMeshProUGUI>();
 
             // New Game button
-            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(120f, 48f), () =>
+            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(82f, 36f), () =>
             {
                 Debug.Log("HUD CLICK: New Game");
                 _game.RestartGame();
@@ -249,6 +269,155 @@ namespace Minesweeper3D.Unity
             _endPanel.SetActive(false);
         }
 
+        private void BuildSliceNav()
+        {
+            var panel = new GameObject("SliceNav");
+            panel.transform.SetParent(_canvas.transform, false);
+            var rt = panel.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.sizeDelta = new Vector2(70f, 190f);
+            rt.anchoredPosition = new Vector2(-5f, 0f);
+
+            var bg = panel.AddComponent<Image>();
+            bg.color = new Color(0.1f, 0.1f, 0.18f, 0.4f);
+            bg.raycastTarget = false;
+
+            var layout = panel.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(5, 5, 5, 5);
+            layout.spacing = 4f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = false;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            // UP arrow
+            MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(60f, 60f), () =>
+            {
+                _game.HandleSliceChangePublic(1);
+            });
+
+            // Slice label
+            _sliceNavText = MakeLabel(panel.transform, "SliceNavText", "1/4", 18);
+            _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(60f, 40f);
+
+            // DOWN arrow
+            MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(60f, 60f), () =>
+            {
+                _game.HandleSliceChangePublic(-1);
+            });
+        }
+
+        private void BuildSliceFlash()
+        {
+            var go = new GameObject("SliceFlash");
+            go.transform.SetParent(_canvas.transform, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(200f, 80f);
+            rt.anchoredPosition = Vector2.zero;
+            _sliceFlash = go.AddComponent<TextMeshProUGUI>();
+            _sliceFlash.fontSize = 48;
+            _sliceFlash.color = Color.clear;
+            _sliceFlash.alignment = TextAlignmentOptions.Center;
+            _sliceFlash.raycastTarget = false;
+        }
+
+        public void FlashSliceIndicator()
+        {
+            if (_sliceFlashCoroutine != null)
+                StopCoroutine(_sliceFlashCoroutine);
+            _sliceFlashCoroutine = StartCoroutine(SliceFlashRoutine());
+        }
+
+        private IEnumerator SliceFlashRoutine()
+        {
+            _sliceFlash.text = $"{_slice.CurrentSlice + 1}/{_slice.Size}";
+            _sliceFlash.color = new Color(1f, 1f, 1f, 0.9f);
+            float duration = 0.5f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float a = Mathf.Lerp(0.9f, 0f, elapsed / duration);
+                _sliceFlash.color = new Color(1f, 1f, 1f, a);
+                yield return null;
+            }
+            _sliceFlash.color = Color.clear;
+            _sliceFlashCoroutine = null;
+        }
+
+        private void BuildTutorialOverlay()
+        {
+            if (PlayerPrefs.GetInt(TutorialShownKey, 0) == 1) return;
+
+            _tutorialOverlay = new GameObject("TutorialOverlay");
+            _tutorialOverlay.transform.SetParent(_canvas.transform, false);
+            var rt = _tutorialOverlay.AddComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.sizeDelta = Vector2.zero;
+
+            // Semi-transparent backdrop
+            var bg = _tutorialOverlay.AddComponent<Image>();
+            bg.color = new Color(0f, 0f, 0f, 0.6f);
+            bg.raycastTarget = true;
+
+            // Tutorial text
+            var textGo = new GameObject("TutorialText");
+            textGo.transform.SetParent(_tutorialOverlay.transform, false);
+            var textRt = textGo.AddComponent<RectTransform>();
+            textRt.anchorMin = new Vector2(0.5f, 0.5f);
+            textRt.anchorMax = new Vector2(0.5f, 0.5f);
+            textRt.pivot = new Vector2(0.5f, 0.5f);
+            textRt.sizeDelta = new Vector2(600f, 200f);
+            var tmp = textGo.AddComponent<TextMeshProUGUI>();
+            tmp.text = "Tap to reveal  |  Long press to flag  |  Arrows to change slice";
+            tmp.fontSize = 24;
+            tmp.color = Color.white;
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.raycastTarget = false;
+
+            // Dismiss hint
+            var hintGo = new GameObject("TapHint");
+            hintGo.transform.SetParent(_tutorialOverlay.transform, false);
+            var hintRt = hintGo.AddComponent<RectTransform>();
+            hintRt.anchorMin = new Vector2(0.5f, 0.3f);
+            hintRt.anchorMax = new Vector2(0.5f, 0.3f);
+            hintRt.pivot = new Vector2(0.5f, 0.5f);
+            hintRt.sizeDelta = new Vector2(300f, 40f);
+            var hint = hintGo.AddComponent<TextMeshProUGUI>();
+            hint.text = "Tap anywhere to start";
+            hint.fontSize = 16;
+            hint.color = new Color(0.7f, 0.7f, 0.7f, 0.8f);
+            hint.alignment = TextAlignmentOptions.Center;
+            hint.raycastTarget = false;
+
+            // Invisible button to catch tap
+            var btnGo = new GameObject("DismissBtn");
+            btnGo.transform.SetParent(_tutorialOverlay.transform, false);
+            var btnRt = btnGo.AddComponent<RectTransform>();
+            btnRt.anchorMin = Vector2.zero;
+            btnRt.anchorMax = Vector2.one;
+            btnRt.sizeDelta = Vector2.zero;
+            var btnImg = btnGo.AddComponent<Image>();
+            btnImg.color = Color.clear;
+            btnImg.raycastTarget = true;
+            var btn = btnGo.AddComponent<Button>();
+            btn.targetGraphic = btnImg;
+            btn.navigation = new Navigation { mode = Navigation.Mode.None };
+            btn.onClick.AddListener(() =>
+            {
+                _tutorialOverlay.SetActive(false);
+                PlayerPrefs.SetInt(TutorialShownKey, 1);
+                PlayerPrefs.Save();
+            });
+        }
+
         private void BuildControlsHint()
         {
             var obj = new GameObject("ControlsHint");
@@ -292,6 +461,8 @@ namespace Minesweeper3D.Unity
 
             _sliceText.text = $"Slice {_slice.CurrentSlice + 1}/{_slice.Size}";
             _timerText.text = $"Time: {_game.Timer.FormattedTime}";
+            if (_sliceNavText != null)
+                _sliceNavText.text = $"{_slice.CurrentSlice + 1}/{_slice.Size}";
 
             Board board = _game.Board;
             if (board == null)
@@ -458,7 +629,7 @@ namespace Minesweeper3D.Unity
             textRt.sizeDelta = Vector2.zero;
             var tmp = textGo.AddComponent<TextMeshProUGUI>();
             tmp.text = label;
-            tmp.fontSize = 16;
+            tmp.fontSize = 13;
             tmp.color = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.raycastTarget = false;

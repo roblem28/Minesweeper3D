@@ -26,12 +26,16 @@ namespace Minesweeper3D.Unity
         {
             _target = target;
 
-            // Auto-frame: calculate distance from grid size and camera FOV
+            // Auto-frame: fit full grid visible on phone landscape (use vertical FOV)
             var cam = GetComponent<Camera>();
             if (cam != null && cam.fieldOfView > 0f)
             {
                 float halfFov = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
-                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(halfFov) * 1.3f;
+                float aspect = cam.aspect > 0f ? cam.aspect : 16f / 9f;
+                // Use the tighter axis (vertical on landscape phones)
+                float halfFovH = Mathf.Atan(Mathf.Tan(halfFov) * aspect);
+                float fov = Mathf.Min(halfFov, halfFovH);
+                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(fov) * 1.15f;
             }
             else
             {

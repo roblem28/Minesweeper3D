@@ -17,8 +17,8 @@ namespace Minesweeper3D.Unity
         private CellView[,,] _cells;
         private Coroutine _transition;
 
-        public const float Spacing = 1.2f;
-        private const float CubeScale = 0.8f;
+        public const float Spacing = 1.3f;
+        private const float CubeScale = 0.6f;
         private const float TransitionDuration = 0.15f;
 
         public int CurrentSlice => _currentSlice;
@@ -105,7 +105,7 @@ namespace Minesweeper3D.Unity
             mat.SetInt("_ZWrite", 0);
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
 
-            var color = new Color(0.15f, 0.18f, 0.28f, 0.4f);
+            var color = new Color(0.16f, 0.16f, 0.24f, 0.6f);  // #2A2A3E dark blue-gray
             if (mat.HasProperty("_BaseColor"))
                 mat.SetColor("_BaseColor", color);
             if (mat.HasProperty("_Color"))
