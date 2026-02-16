@@ -27,6 +27,7 @@
 Thumbs.db
 
 # Builds
+Builds/
 *.apk
 *.aab
 *.unitypackage
