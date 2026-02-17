@@ -88,6 +88,8 @@ namespace Minesweeper3D.Unity
 
             // Use inspector-assigned floor material — no Shader.Find, no new Material
             var renderer = go.GetComponent<Renderer>();
+            renderer.receiveShadows = true;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             if (_game.FloorMaterial != null)
                 renderer.sharedMaterial = _game.FloorMaterial;
         }

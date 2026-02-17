@@ -21,6 +21,7 @@ namespace Minesweeper3D.Unity
         private float _distance;
         private float _azimuth;
         private float _elevation;
+        private Light _directionalLight;
 
         public void Init(Vector3 target, float gridWorldSize)
         {
@@ -45,6 +46,17 @@ namespace Minesweeper3D.Unity
 
             _azimuth = 45f;    // diagonal view
             _elevation = 30f;  // looking down at the cube
+
+            // Find directional light so shadows follow camera orbit
+            foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            {
+                if (light.type == LightType.Directional)
+                {
+                    _directionalLight = light;
+                    break;
+                }
+            }
+
             ApplyPosition();
         }
 
@@ -77,6 +89,10 @@ namespace Minesweeper3D.Unity
 
             transform.position = _target + new Vector3(x, y, z);
             transform.LookAt(_target);
+
+            // Keep light casting from above-behind the camera so shadows move with orbit
+            if (_directionalLight != null)
+                _directionalLight.transform.rotation = Quaternion.Euler(_elevation + 20f, _azimuth, 0f);
         }
     }
 }

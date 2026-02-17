@@ -73,6 +73,8 @@ namespace Minesweeper3D.Unity
             _z = z;
             _meshFilter = GetComponent<MeshFilter>();
             _renderer = GetComponent<MeshRenderer>();
+            _renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+            _renderer.receiveShadows = true;
             _collider = GetComponent<BoxCollider>();
             _propBlock = new MaterialPropertyBlock();
 
