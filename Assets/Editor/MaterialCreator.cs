@@ -49,8 +49,8 @@ namespace Minesweeper3D.Editor
             {
                 var mat = new Material(unlit);
                 ConfigureTransparent(mat);
-                mat.SetColor("_BaseColor", new Color(0.25f, 0.25f, 0.25f, 0.10f));
-                mat.color = new Color(0.25f, 0.25f, 0.25f, 0.10f);
+                mat.SetColor("_BaseColor", new Color(1.00f, 1.00f, 0.00f, 0.30f));
+                mat.color = new Color(1.00f, 1.00f, 0.00f, 0.30f);
                 SaveMat(mat, "Ghost");
                 ghost = AssetDatabase.LoadAssetAtPath<Material>($"{OutputFolder}/Ghost.mat");
             }
