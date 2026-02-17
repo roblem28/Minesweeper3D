@@ -44,8 +44,8 @@ namespace Minesweeper3D.Unity
             }
             _distance = Mathf.Clamp(_distance, minDistance, maxDistance);
 
-            _azimuth = 45f;    // diagonal view
-            _elevation = 30f;  // looking down at the cube
+            _azimuth = 0f;     // flat front view
+            _elevation = 0f;   // no vertical angle — head-on
 
             // Find directional light so shadows follow camera orbit
             foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))

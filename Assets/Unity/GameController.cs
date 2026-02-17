@@ -51,6 +51,11 @@ namespace Minesweeper3D.Unity
             if (opaqueMaterial == null || ghostMaterial == null || floorMaterial == null)
                 Debug.LogError("[MineSweeper3D] Materials not assigned! Run Tools > Create & Assign Materials.");
 
+            // Default to Easy (4x4x4, 6 mines)
+            CurrentDifficulty = Difficulty.Easy;
+            gridSize = 4;
+            mineCount = 6;
+
             // Slice controller — builds the NxNxN grid
             var sliceObj = new GameObject("SliceController");
             _sliceController = sliceObj.AddComponent<SliceController>();

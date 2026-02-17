@@ -38,11 +38,11 @@ namespace Minesweeper3D.Unity
         private static readonly Color ActiveFlagged  = new Color(1.00f, 0.20f, 0.20f, 1f);
         private static readonly Color ActiveMine     = new Color(0.10f, 0.10f, 0.10f, 1f);
 
-        // --- Ghost wire colors (yellow wireframe) ---
-        private static readonly Color GhostHidden  = new Color(1.00f, 1.00f, 0.00f, 0.30f);
-        private static readonly Color GhostRevealed = new Color(1.00f, 1.00f, 0.00f, 0.20f);
-        private static readonly Color GhostFlagged = new Color(1.00f, 0.20f, 0.20f, 0.30f);
-        private static readonly Color GhostMine    = new Color(1.00f, 1.00f, 0.00f, 0.25f);
+        // --- Ghost wire colors (dim yellow wireframe) ---
+        private static readonly Color GhostHidden  = new Color(0.67f, 0.67f, 0.27f, 0.15f);
+        private static readonly Color GhostRevealed = new Color(0.67f, 0.67f, 0.27f, 0.10f);
+        private static readonly Color GhostFlagged = new Color(0.80f, 0.20f, 0.20f, 0.15f);
+        private static readonly Color GhostMine    = new Color(0.67f, 0.67f, 0.27f, 0.12f);
 
         // --- Count label colors (5-tier) ---
         private static readonly Color[] CountColors =
@@ -110,7 +110,7 @@ namespace Minesweeper3D.Unity
             }
 
             // Build wireframe mesh (procedural geometry, no shader needed)
-            _wireframeMesh = WireframeMeshBuilder.Build(1f, 0.035f);
+            _wireframeMesh = WireframeMeshBuilder.Build(1f, 0.018f);
 
             Debug.Log($"[CellView] Opaque mat: {(_opaqueMat != null ? _opaqueMat.shader.name : "NULL")}, Ghost mat: {(_ghostMat != null ? _ghostMat.shader.name : "NULL")}");
         }

@@ -467,8 +467,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 42af85b8c6ba23d4da59d5d2bea2d232, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  gridSize: 6
-  mineCount: 10
+  gridSize: 4
+  mineCount: 6
   seed: -1
   opaqueMaterial: {fileID: 2100000, guid: 9d03c55bb2ff5564eafe44435d09032b, type: 2}
   ghostMaterial: {fileID: 2100000, guid: 5ab3307a58546634ca30240839feeb32, type: 2}
