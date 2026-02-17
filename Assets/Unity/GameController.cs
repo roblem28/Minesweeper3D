@@ -16,6 +16,11 @@ namespace Minesweeper3D.Unity
         [SerializeField] private int mineCount = 6;
         [SerializeField] private int seed = -1; // -1 = random
 
+        [Header("Materials (assign URP materials in inspector)")]
+        [SerializeField] private Material opaqueMaterial;
+        [SerializeField] private Material ghostMaterial;
+        [SerializeField] private Material floorMaterial;
+
         public Board Board { get; private set; }
         public int GridSize => gridSize;
         public int MineCount => mineCount;
@@ -33,10 +38,18 @@ namespace Minesweeper3D.Unity
         public SliceController Slice => _sliceController;
         public int HintsUsed { get; set; }
 
+        // Expose materials for child objects
+        public Material OpaqueMaterial => opaqueMaterial;
+        public Material GhostMaterial => ghostMaterial;
+        public Material FloorMaterial => floorMaterial;
+
         private void Start()
         {
             if (seed < 0)
                 seed = System.Environment.TickCount;
+
+            if (opaqueMaterial == null || ghostMaterial == null || floorMaterial == null)
+                Debug.LogError("[MineSweeper3D] Materials not assigned! Run Tools > Create & Assign Materials.");
 
             // Slice controller — builds the NxNxN grid
             var sliceObj = new GameObject("SliceController");

@@ -5,9 +5,9 @@ using Minesweeper3D.Core;
 namespace Minesweeper3D.Unity
 {
     /// <summary>
-    /// Renders a single cell. Active slice: opaque cube with TMP count label on top face.
+    /// Renders a single cell. Active slice: opaque cube with label on top face.
     /// Ghost slice: wireframe outline (mobile-compatible, no geometry shader).
-    /// Uses shared materials with per-cell MaterialPropertyBlock for colors.
+    /// Uses inspector-assigned URP materials via GameController. Zero Shader.Find.
     /// </summary>
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(BoxCollider))]
     public class CellView : MonoBehaviour
@@ -25,7 +25,7 @@ namespace Minesweeper3D.Unity
         private static Mesh _cubeMesh;
         private static Mesh _wireframeMesh;
 
-        // Two shared materials for all cells
+        // Shared materials — set once from inspector-assigned assets, never created at runtime
         private static Material _opaqueMat;
         private static Material _ghostMat;
 
@@ -33,15 +33,15 @@ namespace Minesweeper3D.Unity
         private const float RevealedScale = 0.52f;
 
         // --- Active slice colors ---
-        private static readonly Color ActiveHidden   = new Color(0.44f, 0.44f, 0.44f, 1f);  // #707070 medium gray
-        private static readonly Color ActiveRevealed = new Color(0.75f, 0.75f, 0.75f, 1f);  // #C0C0C0 light gray
-        private static readonly Color ActiveFlagged  = new Color(1.00f, 0.20f, 0.20f, 1f);  // #FF3333 bright red
-        private static readonly Color ActiveMine     = new Color(0.10f, 0.10f, 0.10f, 1f);  // #1A1A1A near black
+        private static readonly Color ActiveHidden   = new Color(0.44f, 0.44f, 0.44f, 1f);
+        private static readonly Color ActiveRevealed = new Color(0.75f, 0.75f, 0.75f, 1f);
+        private static readonly Color ActiveFlagged  = new Color(1.00f, 0.20f, 0.20f, 1f);
+        private static readonly Color ActiveMine     = new Color(0.10f, 0.10f, 0.10f, 1f);
 
         // --- Ghost wire colors ---
-        private static readonly Color GhostHidden  = new Color(0.25f, 0.25f, 0.25f, 0.10f);  // #404040 alpha 0.1
-        private static readonly Color GhostRevealed = new Color(0.31f, 0.31f, 0.31f, 0.15f); // #505050 alpha 0.15
-        private static readonly Color GhostFlagged = new Color(1.00f, 0.20f, 0.20f, 0.15f);  // bright red ghost
+        private static readonly Color GhostHidden  = new Color(0.25f, 0.25f, 0.25f, 0.10f);
+        private static readonly Color GhostRevealed = new Color(0.31f, 0.31f, 0.31f, 0.15f);
+        private static readonly Color GhostFlagged = new Color(1.00f, 0.20f, 0.20f, 0.15f);
         private static readonly Color GhostMine    = new Color(0.10f, 0.10f, 0.10f, 0.12f);
 
         // --- Count label colors (5-tier) ---
@@ -57,6 +57,15 @@ namespace Minesweeper3D.Unity
 
         public Coord3 Coord => new Coord3(_x, _y, _z);
 
+        /// <summary>
+        /// Provide the inspector-assigned materials once. Called before any Init().
+        /// </summary>
+        public static void SetSharedMaterials(Material opaque, Material ghost)
+        {
+            _opaqueMat = opaque;
+            _ghostMat = ghost;
+        }
+
         public void Init(int x, int y, int z)
         {
             _x = x;
@@ -67,7 +76,7 @@ namespace Minesweeper3D.Unity
             _collider = GetComponent<BoxCollider>();
             _propBlock = new MaterialPropertyBlock();
 
-            EnsureSharedResources(_renderer.sharedMaterial);
+            EnsureSharedMeshes();
 
             // Label child — positioned just above top face
             var labelObj = new GameObject("Label");
@@ -85,11 +94,11 @@ namespace Minesweeper3D.Unity
             SetActiveSlice(false);
         }
 
-        private static void EnsureSharedResources(Material source)
+        private static void EnsureSharedMeshes()
         {
-            if (_opaqueMat != null) return;
+            if (_cubeMesh != null) return;
 
-            // Cache the cube mesh from the first cell
+            // Cache the cube mesh
             _cubeMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
             if (_cubeMesh == null)
             {
@@ -98,43 +107,10 @@ namespace Minesweeper3D.Unity
                 Object.Destroy(temp);
             }
 
-            // Build wireframe mesh
+            // Build wireframe mesh (procedural geometry, no shader needed)
             _wireframeMesh = WireframeMeshBuilder.Build(1f, 0.02f);
 
-            // --- Opaque material: URP/Simple Lit for active cubes ---
-            Shader opaqueShader = Shader.Find("Universal Render Pipeline/Simple Lit");
-            if (opaqueShader == null)
-                opaqueShader = Shader.Find("Universal Render Pipeline/Lit");
-            if (opaqueShader == null)
-                opaqueShader = source.shader; // last resort fallback
-
-            _opaqueMat = new Material(opaqueShader);
-            _opaqueMat.SetColor("_BaseColor", ActiveHidden);
-            // Matte finish: zero smoothness/specular
-            if (_opaqueMat.HasProperty("_Smoothness"))
-                _opaqueMat.SetFloat("_Smoothness", 0.1f);
-            if (_opaqueMat.HasProperty("_SpecColor"))
-                _opaqueMat.SetColor("_SpecColor", new Color(0.1f, 0.1f, 0.1f, 1f));
-
-            // --- Ghost material: URP/Unlit with transparent surface ---
-            Shader ghostShader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (ghostShader == null)
-                ghostShader = opaqueShader; // fallback
-
-            _ghostMat = new Material(ghostShader);
-            // Configure as transparent
-            _ghostMat.SetFloat("_Surface", 1f); // Transparent
-            _ghostMat.SetFloat("_Blend", 0f);   // Alpha blend
-            _ghostMat.SetOverrideTag("RenderType", "Transparent");
-            _ghostMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            _ghostMat.EnableKeyword("_ALPHABLEND_ON");
-            _ghostMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            _ghostMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            _ghostMat.SetInt("_ZWrite", 0);
-            _ghostMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-            _ghostMat.SetColor("_BaseColor", GhostHidden);
-
-            Debug.Log($"[CellView] Opaque shader: {_opaqueMat.shader.name}, Ghost shader: {_ghostMat.shader.name}");
+            Debug.Log($"[CellView] Opaque mat: {(_opaqueMat != null ? _opaqueMat.shader.name : "NULL")}, Ghost mat: {(_ghostMat != null ? _ghostMat.shader.name : "NULL")}");
         }
 
         /// <summary>Switch between opaque cube (active) and wireframe (ghost) rendering.</summary>
@@ -308,7 +284,7 @@ namespace Minesweeper3D.Unity
         private void ApplyColor(Color c)
         {
             _propBlock.SetColor("_BaseColor", c); // URP
-            _propBlock.SetColor("_Color", c);     // Standard fallback
+            _propBlock.SetColor("_Color", c);     // fallback
             _renderer.SetPropertyBlock(_propBlock);
         }
 

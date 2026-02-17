@@ -32,6 +32,10 @@ namespace Minesweeper3D.Unity
             _game = game;
             _currentSlice = 0;
             _cells = new CellView[size, size, size];
+
+            // Pass inspector-assigned materials to CellView before building grid
+            CellView.SetSharedMaterials(game.OpaqueMaterial, game.GhostMaterial);
+
             BuildGrid();
             CreateFloorPlane();
             RefreshAll();
@@ -82,33 +86,10 @@ namespace Minesweeper3D.Unity
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);
 
-            // URP Unlit transparent material for floor
+            // Use inspector-assigned floor material — no Shader.Find, no new Material
             var renderer = go.GetComponent<Renderer>();
-            Shader floorShader = Shader.Find("Universal Render Pipeline/Unlit");
-            Material mat;
-            if (floorShader != null)
-            {
-                mat = new Material(floorShader);
-            }
-            else
-            {
-                mat = new Material(renderer.sharedMaterial);
-            }
-
-            mat.SetFloat("_Surface", 1f); // Transparent
-            mat.SetFloat("_Blend", 0f);   // Alpha blend
-            mat.SetOverrideTag("RenderType", "Transparent");
-            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            mat.EnableKeyword("_ALPHABLEND_ON");
-            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-
-            var color = new Color(0.16f, 0.16f, 0.24f, 0.6f);  // #2A2A3E dark blue-gray
-            mat.SetColor("_BaseColor", color);
-
-            renderer.sharedMaterial = mat;
+            if (_game.FloorMaterial != null)
+                renderer.sharedMaterial = _game.FloorMaterial;
         }
 
         public void SetSlice(int z)

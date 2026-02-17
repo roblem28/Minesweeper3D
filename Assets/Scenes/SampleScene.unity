@@ -470,6 +470,9 @@ MonoBehaviour:
   gridSize: 6
   mineCount: 10
   seed: -1
+  opaqueMaterial: {fileID: 2100000, guid: 9d03c55bb2ff5564eafe44435d09032b, type: 2}
+  ghostMaterial: {fileID: 2100000, guid: 5ab3307a58546634ca30240839feeb32, type: 2}
+  floorMaterial: {fileID: 2100000, guid: 7425962fc7df5174cb25a4c1f3b9b255, type: 2}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
