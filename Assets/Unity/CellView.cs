@@ -36,7 +36,7 @@ namespace Minesweeper3D.Unity
         private static readonly Color ActiveHidden   = new Color(0.44f, 0.44f, 0.44f, 1f);  // #707070 medium gray
         private static readonly Color ActiveRevealed = new Color(0.75f, 0.75f, 0.75f, 1f);  // #C0C0C0 light gray
         private static readonly Color ActiveFlagged  = new Color(1.00f, 0.20f, 0.20f, 1f);  // #FF3333 bright red
-        private static readonly Color ActiveMine     = new Color(0.08f, 0.08f, 0.08f, 1f);
+        private static readonly Color ActiveMine     = new Color(0.10f, 0.10f, 0.10f, 1f);  // #1A1A1A near black
 
         // --- Ghost wire colors ---
         private static readonly Color GhostHidden  = new Color(0.25f, 0.25f, 0.25f, 0.10f);  // #404040 alpha 0.1
@@ -93,7 +93,6 @@ namespace Minesweeper3D.Unity
             _cubeMesh = Resources.GetBuiltinResource<Mesh>("Cube.fbx");
             if (_cubeMesh == null)
             {
-                // Fallback: get it from the primitive
                 var temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 _cubeMesh = temp.GetComponent<MeshFilter>().sharedMesh;
                 Object.Destroy(temp);
@@ -102,34 +101,40 @@ namespace Minesweeper3D.Unity
             // Build wireframe mesh
             _wireframeMesh = WireframeMeshBuilder.Build(1f, 0.02f);
 
-            // Opaque material — clone the default cube material
-            _opaqueMat = new Material(source);
+            // --- Opaque material: URP/Simple Lit for active cubes ---
+            Shader opaqueShader = Shader.Find("Universal Render Pipeline/Simple Lit");
+            if (opaqueShader == null)
+                opaqueShader = Shader.Find("Universal Render Pipeline/Lit");
+            if (opaqueShader == null)
+                opaqueShader = source.shader; // last resort fallback
 
-            // Ghost material — clone and switch to transparent blending (URP/Lit)
-            _ghostMat = new Material(source);
+            _opaqueMat = new Material(opaqueShader);
+            _opaqueMat.SetColor("_BaseColor", ActiveHidden);
+            // Matte finish: zero smoothness/specular
+            if (_opaqueMat.HasProperty("_Smoothness"))
+                _opaqueMat.SetFloat("_Smoothness", 0.1f);
+            if (_opaqueMat.HasProperty("_SpecColor"))
+                _opaqueMat.SetColor("_SpecColor", new Color(0.1f, 0.1f, 0.1f, 1f));
 
-            // URP Lit shader
-            if (_ghostMat.HasProperty("_Surface"))
-            {
-                _ghostMat.SetFloat("_Surface", 1f);
-                _ghostMat.SetFloat("_Blend", 0f);
-                _ghostMat.SetOverrideTag("RenderType", "Transparent");
-                _ghostMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                _ghostMat.EnableKeyword("_ALPHABLEND_ON");
-            }
-            // Built-in Standard shader fallback
-            if (_ghostMat.HasProperty("_Mode"))
-            {
-                _ghostMat.SetFloat("_Mode", 3f);
-                _ghostMat.DisableKeyword("_ALPHATEST_ON");
-                _ghostMat.EnableKeyword("_ALPHABLEND_ON");
-                _ghostMat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-            }
-            // Blend settings common to both pipelines
+            // --- Ghost material: URP/Unlit with transparent surface ---
+            Shader ghostShader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (ghostShader == null)
+                ghostShader = opaqueShader; // fallback
+
+            _ghostMat = new Material(ghostShader);
+            // Configure as transparent
+            _ghostMat.SetFloat("_Surface", 1f); // Transparent
+            _ghostMat.SetFloat("_Blend", 0f);   // Alpha blend
+            _ghostMat.SetOverrideTag("RenderType", "Transparent");
+            _ghostMat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            _ghostMat.EnableKeyword("_ALPHABLEND_ON");
             _ghostMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
             _ghostMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
             _ghostMat.SetInt("_ZWrite", 0);
             _ghostMat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            _ghostMat.SetColor("_BaseColor", GhostHidden);
+
+            Debug.Log($"[CellView] Opaque shader: {_opaqueMat.shader.name}, Ghost shader: {_ghostMat.shader.name}");
         }
 
         /// <summary>Switch between opaque cube (active) and wireframe (ghost) rendering.</summary>

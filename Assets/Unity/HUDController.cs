@@ -15,6 +15,7 @@ namespace Minesweeper3D.Unity
         private SliceController _slice;
         private InputManager _input;
         private Canvas _canvas;
+        private RectTransform _safeAreaRoot;
 
         // Info labels
         private TextMeshProUGUI _sliceText;
@@ -86,6 +87,16 @@ namespace Minesweeper3D.Unity
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
 
+            // SafeArea root — all UI panels go inside this
+            var safeObj = new GameObject("SafeArea");
+            safeObj.transform.SetParent(_canvas.transform, false);
+            _safeAreaRoot = safeObj.AddComponent<RectTransform>();
+            _safeAreaRoot.anchorMin = Vector2.zero;
+            _safeAreaRoot.anchorMax = Vector2.one;
+            _safeAreaRoot.offsetMin = Vector2.zero;
+            _safeAreaRoot.offsetMax = Vector2.zero;
+            safeObj.AddComponent<SafeAreaHandler>();
+
             // EventSystem
             EnsureEventSystem();
 
@@ -136,12 +147,12 @@ namespace Minesweeper3D.Unity
         private void BuildInfoBar()
         {
             var panel = new GameObject("InfoBar");
-            panel.transform.SetParent(_canvas.transform, false);
+            panel.transform.SetParent(_safeAreaRoot, false);
             var rt = panel.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(0f, 35f);
+            rt.sizeDelta = new Vector2(0f, 50f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
@@ -157,22 +168,22 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            _sliceText  = MakeLabel(panel.transform, "SliceText",  "Slice 1/6",      14);
-            _mineText   = MakeLabel(panel.transform, "MineText",   "Mines: 10",      14);
-            _flagText   = MakeLabel(panel.transform, "FlagText",   "Flags: 0",       14);
-            _timerText  = MakeLabel(panel.transform, "TimerText",  "Time: 00:00",    14);
-            _statusText = MakeLabel(panel.transform, "StatusText", "Click to start", 14);
+            _sliceText  = MakeLabel(panel.transform, "SliceText",  "Slice 1/6",      20);
+            _mineText   = MakeLabel(panel.transform, "MineText",   "Mines: 10",      20);
+            _flagText   = MakeLabel(panel.transform, "FlagText",   "Flags: 0",       20);
+            _timerText  = MakeLabel(panel.transform, "TimerText",  "Time: 00:00",    20);
+            _statusText = MakeLabel(panel.transform, "StatusText", "Click to start", 20);
         }
 
         private void BuildButtonBar()
         {
             var panel = new GameObject("ButtonBar");
-            panel.transform.SetParent(_canvas.transform, false);
+            panel.transform.SetParent(_safeAreaRoot, false);
             var rt = panel.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.sizeDelta = new Vector2(90f, 220f);
+            rt.sizeDelta = new Vector2(120f, 320f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
@@ -198,7 +209,7 @@ namespace Minesweeper3D.Unity
             {
                 int idx = i;
                 string name = labels[i];
-                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(82f, 36f), () =>
+                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(110f, 50f), () =>
                 {
                     Debug.Log($"HUD CLICK: {name}");
                     _game.ApplyDifficulty(diffs[idx]);
@@ -208,7 +219,7 @@ namespace Minesweeper3D.Unity
             }
 
             // Hint button
-            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(82f, 36f), () =>
+            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(110f, 50f), () =>
             {
                 Debug.Log("HUD CLICK: Hint");
                 OnHintClicked();
@@ -217,7 +228,7 @@ namespace Minesweeper3D.Unity
             _hintBtnText = hintGo.GetComponentInChildren<TextMeshProUGUI>();
 
             // New Game button
-            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(82f, 36f), () =>
+            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(110f, 50f), () =>
             {
                 Debug.Log("HUD CLICK: New Game");
                 _game.RestartGame();
@@ -225,13 +236,24 @@ namespace Minesweeper3D.Unity
             });
             _newGameBtn = ngGo.GetComponent<Button>();
 
+            // Quit button
+            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(110f, 50f), () =>
+            {
+                Debug.Log("HUD CLICK: Quit");
+#if UNITY_EDITOR
+                UnityEditor.EditorApplication.isPlaying = false;
+#else
+                Application.Quit();
+#endif
+            });
+
             RefreshDifficultyHighlight();
         }
 
         private void BuildEndPanel()
         {
             _endPanel = new GameObject("EndPanel");
-            _endPanel.transform.SetParent(_canvas.transform, false);
+            _endPanel.transform.SetParent(_safeAreaRoot, false);
             var rt = _endPanel.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -251,14 +273,14 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            _endTitle      = MakeLabel(_endPanel.transform, "EndTitle", "", 42);
-            _endTime       = MakeLabel(_endPanel.transform, "EndTime", "", 28);
-            _endHints      = MakeLabel(_endPanel.transform, "EndHints", "", 28);
-            _endScore      = MakeLabel(_endPanel.transform, "EndScore", "", 32);
-            _endDifficulty = MakeLabel(_endPanel.transform, "EndDifficulty", "", 24);
+            _endTitle      = MakeLabel(_endPanel.transform, "EndTitle", "", 36);
+            _endTime       = MakeLabel(_endPanel.transform, "EndTime", "", 22);
+            _endHints      = MakeLabel(_endPanel.transform, "EndHints", "", 22);
+            _endScore      = MakeLabel(_endPanel.transform, "EndScore", "", 26);
+            _endDifficulty = MakeLabel(_endPanel.transform, "EndDifficulty", "", 20);
             _endDifficulty.color = new Color(0.7f, 0.7f, 0.7f);
 
-            MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(200f, 50f), () =>
+            MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(220f, 55f), () =>
             {
                 _endPanel.SetActive(false);
                 _input?.SetEnabled(true);
@@ -272,12 +294,12 @@ namespace Minesweeper3D.Unity
         private void BuildSliceNav()
         {
             var panel = new GameObject("SliceNav");
-            panel.transform.SetParent(_canvas.transform, false);
+            panel.transform.SetParent(_safeAreaRoot, false);
             var rt = panel.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(1f, 0.5f);
             rt.anchorMax = new Vector2(1f, 0.5f);
             rt.pivot = new Vector2(1f, 0.5f);
-            rt.sizeDelta = new Vector2(70f, 190f);
+            rt.sizeDelta = new Vector2(80f, 220f);
             rt.anchoredPosition = new Vector2(-5f, 0f);
 
             var bg = panel.AddComponent<Image>();
@@ -294,17 +316,17 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandHeight = false;
 
             // UP arrow
-            MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(60f, 60f), () =>
+            MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(70f, 70f), () =>
             {
                 _game.HandleSliceChangePublic(1);
             });
 
             // Slice label
-            _sliceNavText = MakeLabel(panel.transform, "SliceNavText", "1/4", 18);
-            _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(60f, 40f);
+            _sliceNavText = MakeLabel(panel.transform, "SliceNavText", "1/4", 22);
+            _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(70f, 50f);
 
             // DOWN arrow
-            MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(60f, 60f), () =>
+            MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(70f, 70f), () =>
             {
                 _game.HandleSliceChangePublic(-1);
             });
@@ -313,7 +335,7 @@ namespace Minesweeper3D.Unity
         private void BuildSliceFlash()
         {
             var go = new GameObject("SliceFlash");
-            go.transform.SetParent(_canvas.transform, false);
+            go.transform.SetParent(_safeAreaRoot, false);
             var rt = go.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -421,7 +443,7 @@ namespace Minesweeper3D.Unity
         private void BuildControlsHint()
         {
             var obj = new GameObject("ControlsHint");
-            obj.transform.SetParent(_canvas.transform, false);
+            obj.transform.SetParent(_safeAreaRoot, false);
             var rt = obj.AddComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.zero;
@@ -432,7 +454,7 @@ namespace Minesweeper3D.Unity
             _controlsHint.text = Application.isMobilePlatform
                 ? "Tap: Reveal | Hold: Flag | Swipe 2F: Slice | Pinch: Zoom | Drag: Orbit"
                 : "LMB: Reveal | RMB: Flag | Scroll: Slice | Ctrl+Scroll: Zoom | MMB: Orbit";
-            _controlsHint.fontSize = 14;
+            _controlsHint.fontSize = 16;
             _controlsHint.color = new Color(0.7f, 0.7f, 0.7f, 0.5f);
             _controlsHint.raycastTarget = false;
         }
@@ -629,7 +651,7 @@ namespace Minesweeper3D.Unity
             textRt.sizeDelta = Vector2.zero;
             var tmp = textGo.AddComponent<TextMeshProUGUI>();
             tmp.text = label;
-            tmp.fontSize = 13;
+            tmp.fontSize = 18;
             tmp.color = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.raycastTarget = false;
