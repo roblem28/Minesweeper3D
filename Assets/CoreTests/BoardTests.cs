@@ -315,5 +315,94 @@ namespace Minesweeper3D.CoreTests
             Assert.AreEqual(GameStatus.Playing, board.Status,
                 "Flagging only some mines should not trigger win");
         }
+        // --- Chord Reveal ---
+
+        [Test]
+        public void ChordReveal_CorrectFlags_RevealsNeighbors()
+        {
+            // 4x4x4, mines at (0,0,0) and (3,3,3). Reveal (1,1,1) which has count=1.
+            // Flag (0,0,0) only (not all mines). Chord (1,1,1) reveals unflagged hidden neighbors.
+            var mines = new[] { new Coord3(0, 0, 0), new Coord3(3, 3, 3) };
+            var board = new Board(4, mines);
+            board.Reveal(new Coord3(1, 1, 1));
+            Assert.AreEqual(CellState.Revealed, board.GetState(new Coord3(1, 1, 1)));
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 1)));
+
+            board.ToggleFlag(new Coord3(0, 0, 0));
+            Assert.AreEqual(GameStatus.Playing, board.Status); // game still playing (2nd mine unflagged)
+            bool result = board.ChordReveal(new Coord3(1, 1, 1));
+            Assert.IsTrue(result);
+
+            // All non-mine neighbors of (1,1,1) should be revealed
+            foreach (var n in board.GetNeighbors(new Coord3(1, 1, 1)))
+            {
+                if (n.Equals(new Coord3(0, 0, 0))) continue; // mine, flagged
+                Assert.AreEqual(CellState.Revealed, board.GetState(n),
+                    $"Neighbor {n} should be revealed after chord");
+            }
+        }
+
+        [Test]
+        public void ChordReveal_WrongFlag_CausesLoss()
+        {
+            // 4x4x4, mine at (0,0,0). Cell (1,0,0) has count=1.
+            // Flag (0,1,0) (wrong!) instead of (0,0,0). Chord (1,0,0).
+            // This should reveal (0,0,0) which is a mine → loss.
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(4, mines);
+            board.Reveal(new Coord3(1, 0, 0));
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 0, 0)));
+
+            board.ToggleFlag(new Coord3(0, 1, 0)); // wrong flag
+            bool result = board.ChordReveal(new Coord3(1, 0, 0));
+            Assert.IsTrue(result);
+            Assert.AreEqual(GameStatus.Lost, board.Status);
+        }
+
+        [Test]
+        public void ChordReveal_NotEnoughFlags_DoesNothing()
+        {
+            // 4x4x4, mine at (0,0,0). Cell (1,1,1) has count=1. Don't flag.
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(4, mines);
+            board.Reveal(new Coord3(1, 1, 1));
+
+            bool result = board.ChordReveal(new Coord3(1, 1, 1));
+            Assert.IsFalse(result, "Chord should not trigger without enough flags");
+        }
+
+        // --- CountFlaggedNeighbors ---
+
+        [Test]
+        public void CountFlaggedNeighbors_ReturnsCorrectCount()
+        {
+            var board = new Board(3, System.Array.Empty<Coord3>());
+            board.ToggleFlag(new Coord3(0, 0, 0));
+            board.ToggleFlag(new Coord3(2, 2, 2));
+            board.ToggleFlag(new Coord3(0, 2, 0));
+
+            // (1,1,1) has 26 neighbors. 3 are flagged: (0,0,0), (2,2,2), (0,2,0) — all adjacent
+            Assert.AreEqual(3, board.CountFlaggedNeighbors(new Coord3(1, 1, 1)));
+
+            // (0,0,0) has 7 neighbors. None flagged except possibly (0,2,0) — not adjacent (dy=2)
+            Assert.AreEqual(0, board.CountFlaggedNeighbors(new Coord3(0, 0, 0)));
+        }
+
+        // --- GetCrossSliceStatus ---
+
+        [Test]
+        public void GetCrossSliceStatus_DetectsAboveAndBelow()
+        {
+            // 4x4x4, all cells hidden. Cell (1,1,1) has neighbors on z=0 (below) and z=2 (above).
+            var board = new Board(4, System.Array.Empty<Coord3>());
+            board.GetCrossSliceStatus(new Coord3(1, 1, 1), out bool hasAbove, out bool hasBelow);
+            Assert.IsTrue(hasAbove, "Should detect hidden cells on z=2 (above)");
+            Assert.IsTrue(hasBelow, "Should detect hidden cells on z=0 (below)");
+
+            // Corner cell (0,0,0) has neighbors on z=1 (above) only
+            board.GetCrossSliceStatus(new Coord3(0, 0, 0), out hasAbove, out hasBelow);
+            Assert.IsTrue(hasAbove, "Should detect hidden cells above corner");
+            Assert.IsFalse(hasBelow, "No cells below z=0");
+        }
     }
 }

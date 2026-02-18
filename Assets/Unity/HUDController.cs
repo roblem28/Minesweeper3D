@@ -53,6 +53,20 @@ namespace Minesweeper3D.Unity
         // Controls hint
         private TextMeshProUGUI _controlsHint;
 
+        // Remaining mine count (Feature 2)
+        private TextMeshProUGUI _remainingInfoText;
+        private GameObject _remainingInfoObj;
+
+        // Slice arrow pulse
+        private GameObject _sliceUpBtn;
+        private GameObject _sliceDownBtn;
+        private Coroutine _pulseCoroutine;
+
+        // Mobile flag toggle
+        private bool _flagMode;
+        private Image _flagToggleBg;
+        public bool IsFlagMode => _flagMode;
+
         public void Init(GameController game, SliceController slice, InputManager input)
         {
             _game = game;
@@ -114,6 +128,9 @@ namespace Minesweeper3D.Unity
 
             // === SLICE FLASH (center) ===
             BuildSliceFlash();
+
+            // === REMAINING INFO (below info bar) ===
+            BuildRemainingInfo();
 
             // === CONTROLS HINT (bottom-left) ===
             BuildControlsHint();
@@ -247,6 +264,14 @@ namespace Minesweeper3D.Unity
 #endif
             });
 
+            // Mobile flag toggle (since long press is now highlight, not flag)
+            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(150f, 60f), 24, () =>
+            {
+                _flagMode = !_flagMode;
+                _flagToggleBg.color = _flagMode ? ActiveColor : InactiveColor;
+            });
+            _flagToggleBg = flagGo.GetComponent<Image>();
+
             RefreshDifficultyHighlight();
         }
 
@@ -316,7 +341,7 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandHeight = false;
 
             // UP arrow
-            MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(90f, 90f), 24, () =>
+            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(90f, 90f), 24, () =>
             {
                 _game.HandleSliceChangePublic(1);
             });
@@ -326,7 +351,7 @@ namespace Minesweeper3D.Unity
             _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(90f, 60f);
 
             // DOWN arrow
-            MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(90f, 90f), 24, () =>
+            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(90f, 90f), 24, () =>
             {
                 _game.HandleSliceChangePublic(-1);
             });
@@ -440,6 +465,65 @@ namespace Minesweeper3D.Unity
             });
         }
 
+        private void BuildRemainingInfo()
+        {
+            _remainingInfoObj = new GameObject("RemainingInfo");
+            _remainingInfoObj.transform.SetParent(_safeAreaRoot, false);
+            var rt = _remainingInfoObj.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 1f);
+            rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(400f, 40f);
+            rt.anchoredPosition = new Vector2(0f, -75f);
+            _remainingInfoText = _remainingInfoObj.AddComponent<TextMeshProUGUI>();
+            _remainingInfoText.fontSize = 24;
+            _remainingInfoText.color = new Color(1f, 0.9f, 0.3f);
+            _remainingInfoText.alignment = TextAlignmentOptions.Center;
+            _remainingInfoText.raycastTarget = false;
+            _remainingInfoText.text = "";
+            _remainingInfoObj.SetActive(false);
+        }
+
+        public void ShowRemainingInfo(int cellCount, int remaining)
+        {
+            if (_remainingInfoObj == null) return;
+            _remainingInfoText.text = $"Selected: {cellCount} ({remaining} remaining)";
+            _remainingInfoObj.SetActive(true);
+        }
+
+        public void HideRemainingInfo()
+        {
+            if (_remainingInfoObj != null)
+                _remainingInfoObj.SetActive(false);
+        }
+
+        public void PulseSliceArrow(int direction)
+        {
+            if (_pulseCoroutine != null) StopCoroutine(_pulseCoroutine);
+            GameObject target = direction > 0 ? _sliceUpBtn : _sliceDownBtn;
+            if (target != null)
+                _pulseCoroutine = StartCoroutine(PulseArrowRoutine(target));
+        }
+
+        private IEnumerator PulseArrowRoutine(GameObject arrowBtn)
+        {
+            var img = arrowBtn.GetComponent<Image>();
+            if (img == null) yield break;
+            Color original = img.color;
+            Color pulse = new Color(1f, 0.9f, 0.2f, 1f);
+            float duration = 0.6f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.PingPong(elapsed * 4f, 1f);
+                img.color = Color.Lerp(original, pulse, t);
+                yield return null;
+            }
+            img.color = original;
+            _pulseCoroutine = null;
+        }
+
         private void BuildControlsHint()
         {
             var obj = new GameObject("ControlsHint");
@@ -452,8 +536,8 @@ namespace Minesweeper3D.Unity
             rt.anchoredPosition = new Vector2(10f, 10f);
             _controlsHint = obj.AddComponent<TextMeshProUGUI>();
             _controlsHint.text = Application.isMobilePlatform
-                ? "Tap: Reveal | Hold: Flag | Swipe 2F: Slice | Pinch: Zoom | Drag: Orbit"
-                : "LMB: Reveal | RMB: Flag | Scroll: Slice | Ctrl+Scroll: Zoom | MMB: Orbit";
+                ? "Tap: Reveal | Hold: Highlight | 2-Tap: Chord | Flag: Toggle | Drag: Orbit"
+                : "LMB: Reveal | RMB: Flag | Hover: Highlight | 2-Click: Chord | Scroll: Slice";
             _controlsHint.fontSize = 20;
             _controlsHint.color = new Color(0.7f, 0.7f, 0.7f, 0.5f);
             _controlsHint.raycastTarget = false;

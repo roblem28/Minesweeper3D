@@ -145,6 +145,90 @@ namespace Minesweeper3D.Core
             return count;
         }
 
+        /// <summary>
+        /// Chord: if a revealed cell's count equals its flagged neighbor count,
+        /// reveal all unflagged hidden neighbors. May trigger flood-fill or loss.
+        /// </summary>
+        public bool ChordReveal(Coord3 c)
+        {
+            if (!InBounds(c) || Status != GameStatus.Playing) return false;
+            int idx = FlatIndex(c);
+            if (_states[idx] != CellState.Revealed) return false;
+
+            int count = _counts[idx];
+            if (count == 0) return false;
+
+            int flagged = CountFlaggedNeighbors(c);
+            if (flagged != count) return false;
+
+            bool anyRevealed = false;
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dy == 0 && dz == 0) continue;
+                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
+                if (!InBounds(n)) continue;
+                int ni = FlatIndex(n);
+                if (_states[ni] != CellState.Hidden) continue;
+
+                if (_mines[ni])
+                {
+                    _states[ni] = CellState.Revealed;
+                    Status = GameStatus.Lost;
+                    anyRevealed = true;
+                }
+                else
+                {
+                    FloodFill(n);
+                    anyRevealed = true;
+                }
+            }
+
+            if (anyRevealed && Status == GameStatus.Playing)
+                CheckWin();
+
+            return anyRevealed;
+        }
+
+        /// <summary>Count flagged neighbors of a cell. Zero allocation.</summary>
+        public int CountFlaggedNeighbors(Coord3 c)
+        {
+            int flagged = 0;
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dx == 0 && dy == 0 && dz == 0) continue;
+                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
+                if (InBounds(n) && _states[FlatIndex(n)] == CellState.Flagged)
+                    flagged++;
+            }
+            return flagged;
+        }
+
+        /// <summary>Check if any cross-slice (dz != 0) neighbor is Hidden or Flagged.</summary>
+        public void GetCrossSliceStatus(Coord3 c, out bool hasAbove, out bool hasBelow)
+        {
+            hasAbove = false;
+            hasBelow = false;
+            for (int dx = -1; dx <= 1; dx++)
+            for (int dy = -1; dy <= 1; dy++)
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                if (dz == 0) continue;
+                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
+                if (!InBounds(n)) continue;
+                var state = _states[FlatIndex(n)];
+                if (state == CellState.Hidden || state == CellState.Flagged)
+                {
+                    if (dz > 0) hasAbove = true;
+                    else hasBelow = true;
+                }
+                if (hasAbove && hasBelow) return;
+            }
+        }
+
         // --- Internals ---
 
         internal int FlatIndex(Coord3 c) => c.X + Size * (c.Y + Size * c.Z);

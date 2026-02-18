@@ -15,16 +15,31 @@ namespace Minesweeper3D.Unity
     /// </summary>
     public class InputManager : MonoBehaviour
     {
-        // --- Events ---
+        // --- Core game events ---
         public event Action<Coord3> OnReveal;
         public event Action<Coord3> OnFlag;
         public event Action<int> OnSliceChange;
         public event Action<float> OnZoom;
         public event Action<Vector2> OnOrbit;
 
+        // --- Highlight events ---
+        public event Action<Coord3> OnHoverEnter;
+        public event Action OnHoverExit;
+        public event Action<Coord3> OnHighlightStart;  // mobile long press
+        public event Action OnHighlightEnd;             // mobile release
+
+        // --- Chord events ---
+        public event Action<Coord3> OnDoubleClick;      // desktop
+        public event Action<Coord3> OnDoubleTap;        // mobile
+
         // --- Config ---
         private Camera _cam;
         private bool _enabled = true;
+
+        // --- Desktop hover/double-click state ---
+        private Coord3? _lastHoveredCell;
+        private float _lastLeftClickTime;
+        private Coord3? _lastLeftClickCoord;
 
         // --- Touch state ---
         private float _touchStartTime;
@@ -32,12 +47,19 @@ namespace Minesweeper3D.Unity
         private bool _touchMoved;
         private float _prevPinchDist;
         private bool _wasTwoFinger;
+        private bool _isHighlighting;
+
+        // --- Mobile double-tap state ---
+        private float _lastTapTime;
+        private Coord3? _lastTapCoord;
 
         // --- Constants ---
-        private const float LongPressDuration = 0.5f;
+        private const float HighlightPressDuration = 0.3f;
         private const float TapMoveTolerance = 15f;
         private const float SwipeThreshold = 50f;
         private const float PinchThreshold = 20f;
+        private const float DoubleClickWindow = 0.25f;
+        private const float DoubleTapWindow = 0.25f;
 
         public void Init(Camera cam)
         {
@@ -47,6 +69,19 @@ namespace Minesweeper3D.Unity
         public void SetEnabled(bool enabled)
         {
             _enabled = enabled;
+            if (!enabled)
+            {
+                if (_lastHoveredCell.HasValue)
+                {
+                    _lastHoveredCell = null;
+                    OnHoverExit?.Invoke();
+                }
+                if (_isHighlighting)
+                {
+                    _isHighlighting = false;
+                    OnHighlightEnd?.Invoke();
+                }
+            }
         }
 
         private void OnEnable()
@@ -81,10 +116,30 @@ namespace Minesweeper3D.Unity
             var mouse = Mouse.current;
             if (mouse == null) return;
 
-            // --- Click: reveal / flag ---
             bool left = mouse.leftButton.wasPressedThisFrame;
             bool right = mouse.rightButton.wasPressedThisFrame;
 
+            // --- Hover detection (every frame, no button pressed) ---
+            if (!mouse.leftButton.isPressed && !mouse.rightButton.isPressed && !mouse.middleButton.isPressed)
+            {
+                Vector2 pos = mouse.position.ReadValue();
+                if (!IsPointerOverUI() && TryRaycastCell(pos, out Coord3 hoverCoord))
+                {
+                    if (!_lastHoveredCell.HasValue || !_lastHoveredCell.Value.Equals(hoverCoord))
+                    {
+                        if (_lastHoveredCell.HasValue) OnHoverExit?.Invoke();
+                        _lastHoveredCell = hoverCoord;
+                        OnHoverEnter?.Invoke(hoverCoord);
+                    }
+                }
+                else if (_lastHoveredCell.HasValue)
+                {
+                    _lastHoveredCell = null;
+                    OnHoverExit?.Invoke();
+                }
+            }
+
+            // --- Click: reveal / flag / double-click ---
             if (left || right)
             {
                 if (IsPointerOverUI()) return;
@@ -93,9 +148,25 @@ namespace Minesweeper3D.Unity
                 if (TryRaycastCell(pos, out Coord3 coord))
                 {
                     if (left)
-                        OnReveal?.Invoke(coord);
+                    {
+                        if (Time.time - _lastLeftClickTime < DoubleClickWindow
+                            && _lastLeftClickCoord.HasValue
+                            && _lastLeftClickCoord.Value.Equals(coord))
+                        {
+                            OnDoubleClick?.Invoke(coord);
+                            _lastLeftClickTime = 0f;
+                        }
+                        else
+                        {
+                            OnReveal?.Invoke(coord);
+                            _lastLeftClickTime = Time.time;
+                            _lastLeftClickCoord = coord;
+                        }
+                    }
                     else
+                    {
                         OnFlag?.Invoke(coord);
+                    }
                 }
             }
 
@@ -146,23 +217,33 @@ namespace Minesweeper3D.Unity
                     _touchStartTime = Time.time;
                     _touchStartPos = touch.screenPosition;
                     _touchMoved = false;
+                    _isHighlighting = false;
                     break;
 
                 case UnityEngine.InputSystem.TouchPhase.Moved:
+                case UnityEngine.InputSystem.TouchPhase.Stationary:
                 {
                     float dist = Vector2.Distance(touch.screenPosition, _touchStartPos);
                     if (dist > TapMoveTolerance)
                     {
                         _touchMoved = true;
-                        // One-finger drag on empty space = orbit
-                        if (!TryRaycastCell(_touchStartPos, out _))
+                        if (_isHighlighting)
                         {
-                            OnOrbit?.Invoke(touch.delta);
+                            OnHighlightEnd?.Invoke();
+                            _isHighlighting = false;
                         }
-                        else
+                        OnOrbit?.Invoke(touch.delta);
+                    }
+                    else if (!_touchMoved && !_isHighlighting)
+                    {
+                        float duration = Time.time - _touchStartTime;
+                        if (duration >= HighlightPressDuration)
                         {
-                            // Dragging on a cell — still orbit (don't reveal while dragging)
-                            OnOrbit?.Invoke(touch.delta);
+                            if (!IsPointerOverUI() && TryRaycastCell(_touchStartPos, out Coord3 coord))
+                            {
+                                _isHighlighting = true;
+                                OnHighlightStart?.Invoke(coord);
+                            }
                         }
                     }
                     break;
@@ -170,15 +251,34 @@ namespace Minesweeper3D.Unity
 
                 case UnityEngine.InputSystem.TouchPhase.Ended:
                 {
+                    if (_isHighlighting)
+                    {
+                        OnHighlightEnd?.Invoke();
+                        _isHighlighting = false;
+                        break;
+                    }
                     if (!_touchMoved && !IsPointerOverUI())
                     {
                         float duration = Time.time - _touchStartTime;
-                        if (TryRaycastCell(touch.screenPosition, out Coord3 coord))
+                        if (duration < HighlightPressDuration)
                         {
-                            if (duration >= LongPressDuration)
-                                OnFlag?.Invoke(coord);
-                            else
-                                OnReveal?.Invoke(coord);
+                            if (TryRaycastCell(touch.screenPosition, out Coord3 coord))
+                            {
+                                // Double-tap detection
+                                if (Time.time - _lastTapTime < DoubleTapWindow
+                                    && _lastTapCoord.HasValue
+                                    && _lastTapCoord.Value.Equals(coord))
+                                {
+                                    OnDoubleTap?.Invoke(coord);
+                                    _lastTapTime = 0f;
+                                }
+                                else
+                                {
+                                    OnReveal?.Invoke(coord);
+                                    _lastTapTime = Time.time;
+                                    _lastTapCoord = coord;
+                                }
+                            }
                         }
                     }
                     break;
@@ -188,6 +288,13 @@ namespace Minesweeper3D.Unity
 
         private void HandleTwoFingerTouch(Touch t0, Touch t1)
         {
+            // Cancel highlight if switching to two-finger
+            if (_isHighlighting)
+            {
+                OnHighlightEnd?.Invoke();
+                _isHighlighting = false;
+            }
+
             Vector2 pos0 = t0.screenPosition;
             Vector2 pos1 = t1.screenPosition;
             float currentDist = Vector2.Distance(pos0, pos1);

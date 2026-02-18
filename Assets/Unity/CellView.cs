@@ -16,6 +16,7 @@ namespace Minesweeper3D.Unity
         private MeshFilter _meshFilter;
         private MeshRenderer _renderer;
         private TextMesh _label;
+        private TextMesh _crossSliceMarker;
         private BoxCollider _collider;
         private MaterialPropertyBlock _propBlock;
         private bool _isActive;
@@ -91,6 +92,20 @@ namespace Minesweeper3D.Unity
             _label.fontSize = 64;
             _label.fontStyle = FontStyle.Bold;
             _label.text = "";
+
+            // Cross-slice indicator child
+            var markerObj = new GameObject("CrossSliceMarker");
+            markerObj.transform.SetParent(transform);
+            markerObj.transform.localPosition = new Vector3(0f, -0.42f, 0f);
+            _crossSliceMarker = markerObj.AddComponent<TextMesh>();
+            _crossSliceMarker.alignment = TextAlignment.Center;
+            _crossSliceMarker.anchor = TextAnchor.MiddleCenter;
+            _crossSliceMarker.characterSize = 0.18f;
+            _crossSliceMarker.fontSize = 48;
+            _crossSliceMarker.fontStyle = FontStyle.Bold;
+            _crossSliceMarker.text = "";
+            _crossSliceMarker.color = new Color(1f, 0.85f, 0.3f, 0.6f);
+            markerObj.SetActive(false);
 
             // Start as ghost
             SetActiveSlice(false);
@@ -197,6 +212,7 @@ namespace Minesweeper3D.Unity
         private void UpdateGhost(CellState state, int count, bool isMine, bool gameOver)
         {
             _label.gameObject.SetActive(false);
+            HideCrossSliceMarker();
             SetScale(CubeScale);
 
             // Game over: ghost mines
@@ -281,6 +297,46 @@ namespace Minesweeper3D.Unity
             _hintCoroutine = null;
         }
 
+        // ----- Highlight support -----
+
+        public Color GetCurrentColor()
+        {
+            _renderer.GetPropertyBlock(_propBlock);
+            return _propBlock.GetColor("_BaseColor");
+        }
+
+        public void ApplyHighlightColor(Color c)
+        {
+            ApplyColor(c);
+        }
+
+        // ----- Cross-slice indicators -----
+
+        public void ShowCrossSliceMarker(bool hasAbove, bool hasBelow)
+        {
+            if (!_isActive) { HideCrossSliceMarker(); return; }
+            string marker = "";
+            if (hasAbove && hasBelow) marker = "\u25B2\u25BC";
+            else if (hasAbove) marker = "\u25B2";
+            else if (hasBelow) marker = "\u25BC";
+
+            if (marker.Length > 0)
+            {
+                _crossSliceMarker.text = marker;
+                _crossSliceMarker.gameObject.SetActive(true);
+            }
+            else
+            {
+                _crossSliceMarker.gameObject.SetActive(false);
+            }
+        }
+
+        public void HideCrossSliceMarker()
+        {
+            if (_crossSliceMarker != null)
+                _crossSliceMarker.gameObject.SetActive(false);
+        }
+
         // ----- Helpers -----
 
         private void ApplyColor(Color c)
@@ -297,9 +353,14 @@ namespace Minesweeper3D.Unity
 
         private void LateUpdate()
         {
+            if (!_isActive || Camera.main == null) return;
+            var camRot = Camera.main.transform.rotation;
             // Billboard label toward camera (active cells with visible text only)
-            if (_isActive && _label != null && _label.text.Length > 0 && Camera.main != null)
-                _label.transform.rotation = Camera.main.transform.rotation;
+            if (_label != null && _label.text.Length > 0)
+                _label.transform.rotation = camRot;
+            // Billboard cross-slice marker
+            if (_crossSliceMarker != null && _crossSliceMarker.gameObject.activeSelf)
+                _crossSliceMarker.transform.rotation = camRot;
         }
     }
 }

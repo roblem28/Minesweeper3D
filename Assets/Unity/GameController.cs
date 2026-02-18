@@ -31,6 +31,7 @@ namespace Minesweeper3D.Unity
         private SliceController _sliceController;
         private CameraController _cameraController;
         private HUDController _hudController;
+        private HighlightController _highlightController;
         private TimerController _timer;
         private bool _firstClick = true;
 
@@ -83,6 +84,7 @@ namespace Minesweeper3D.Unity
             _inputManager = inputObj.AddComponent<InputManager>();
             _inputManager.Init(cam);
 
+            // Core game events
             _inputManager.OnReveal += HandleReveal;
             _inputManager.OnFlag += HandleFlag;
             _inputManager.OnSliceChange += HandleSliceChange;
@@ -98,6 +100,21 @@ namespace Minesweeper3D.Unity
             _hudController = hudObj.AddComponent<HUDController>();
             _hudController.Init(this, _sliceController, _inputManager);
 
+            // Highlight controller
+            var highlightObj = new GameObject("HighlightController");
+            _highlightController = highlightObj.AddComponent<HighlightController>();
+            _highlightController.Init(this, _sliceController, _hudController);
+
+            // Highlight events (desktop hover + mobile long press)
+            _inputManager.OnHoverEnter += HandleHoverEnter;
+            _inputManager.OnHoverExit += HandleHoverExit;
+            _inputManager.OnHighlightStart += HandleHighlightStart;
+            _inputManager.OnHighlightEnd += HandleHighlightEnd;
+
+            // Chord events (desktop double-click + mobile double-tap)
+            _inputManager.OnDoubleClick += HandleChord;
+            _inputManager.OnDoubleTap += HandleChord;
+
             Debug.Log($"[MineSweeper3D] Started — {gridSize}^3 grid, {mineCount} mines");
         }
 
@@ -105,6 +122,13 @@ namespace Minesweeper3D.Unity
         {
             if (Board != null && Board.Status != GameStatus.Playing)
                 return;
+
+            // Flag mode redirect: when flag toggle is active, taps become flags
+            if (_hudController != null && _hudController.IsFlagMode)
+            {
+                HandleFlag(coord);
+                return;
+            }
 
             if (_firstClick)
             {
@@ -141,6 +165,39 @@ namespace Minesweeper3D.Unity
             _hudController?.Refresh();
             _hudController?.FlashSliceIndicator();
         }
+
+        // --- Highlight handlers ---
+
+        private void HandleHoverEnter(Coord3 coord)
+        {
+            _highlightController?.BeginHighlight(coord);
+        }
+
+        private void HandleHoverExit()
+        {
+            _highlightController?.EndHighlight();
+        }
+
+        private void HandleHighlightStart(Coord3 coord)
+        {
+            _highlightController?.BeginHighlight(coord);
+        }
+
+        private void HandleHighlightEnd()
+        {
+            _highlightController?.EndHighlight();
+        }
+
+        // --- Chord handler ---
+
+        private void HandleChord(Coord3 coord)
+        {
+            _highlightController?.TryChord(coord);
+        }
+
+        // --- Public API for HighlightController ---
+
+        public void TriggerRefreshUI() => RefreshUI();
 
         public void ApplyDifficulty(Difficulty diff)
         {
@@ -201,6 +258,8 @@ namespace Minesweeper3D.Unity
             HintsUsed = 0;
 
             _hudController?.Rebind(_sliceController);
+            _highlightController?.Rebind(_sliceController);
+            _highlightController?.ClearCache();
             RefreshUI();
         }
 
@@ -210,6 +269,7 @@ namespace Minesweeper3D.Unity
                 _timer.StopTimer();
 
             _sliceController.RefreshAll();
+            _highlightController?.RefreshCrossSliceIndicators();
             _hudController?.Refresh();
         }
 
@@ -220,6 +280,12 @@ namespace Minesweeper3D.Unity
                 _inputManager.OnReveal -= HandleReveal;
                 _inputManager.OnFlag -= HandleFlag;
                 _inputManager.OnSliceChange -= HandleSliceChange;
+                _inputManager.OnHoverEnter -= HandleHoverEnter;
+                _inputManager.OnHoverExit -= HandleHoverExit;
+                _inputManager.OnHighlightStart -= HandleHighlightStart;
+                _inputManager.OnHighlightEnd -= HandleHighlightEnd;
+                _inputManager.OnDoubleClick -= HandleChord;
+                _inputManager.OnDoubleTap -= HandleChord;
             }
         }
     }
