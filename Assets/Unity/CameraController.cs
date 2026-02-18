@@ -36,7 +36,7 @@ namespace Minesweeper3D.Unity
                 // Use the tighter axis (vertical on landscape phones)
                 float halfFovH = Mathf.Atan(Mathf.Tan(halfFov) * aspect);
                 float fov = Mathf.Min(halfFov, halfFovH);
-                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(fov) * 1.15f;
+                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(fov) * 1.75f;
             }
             else
             {
