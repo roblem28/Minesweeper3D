@@ -20,6 +20,7 @@ namespace Minesweeper3D.Core
         private int _revealedSafeCount;
         private readonly int _totalSafe;
         private int _flagCount;
+        private int _correctFlagCount;
 
         /// <summary>Create a board of given size with mines pre-placed.</summary>
         /// <param name="size">Side length (NxNxN).</param>
@@ -106,10 +107,13 @@ namespace Minesweeper3D.Core
                 case CellState.Hidden:
                     _states[idx] = CellState.Flagged;
                     _flagCount++;
+                    if (_mines[idx]) _correctFlagCount++;
+                    CheckWin();
                     return true;
                 case CellState.Flagged:
                     _states[idx] = CellState.Hidden;
                     _flagCount--;
+                    if (_mines[idx]) _correctFlagCount--;
                     return true;
                 default:
                     return false;
@@ -198,6 +202,13 @@ namespace Minesweeper3D.Core
         private void CheckWin()
         {
             if (_revealedSafeCount >= _totalSafe)
+            {
+                Status = GameStatus.Won;
+                return;
+            }
+
+            // Win by flagging: all mines flagged, no incorrect flags
+            if (_correctFlagCount == _mineCount && _flagCount == _mineCount)
                 Status = GameStatus.Won;
         }
     }

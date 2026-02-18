@@ -275,5 +275,45 @@ namespace Minesweeper3D.CoreTests
 
             Assert.AreEqual(GameStatus.Won, board.Status);
         }
+
+        [Test]
+        public void Win_AllMinesCorrectlyFlagged()
+        {
+            // 3x3x3 with 2 mines — flag both mines, no wrong flags → Win
+            var mines = new[] { new Coord3(0, 0, 0), new Coord3(2, 2, 2) };
+            var board = new Board(3, mines);
+
+            Assert.AreEqual(GameStatus.Playing, board.Status);
+            board.ToggleFlag(new Coord3(0, 0, 0));
+            Assert.AreEqual(GameStatus.Playing, board.Status); // only 1 of 2 flagged
+            board.ToggleFlag(new Coord3(2, 2, 2));
+            Assert.AreEqual(GameStatus.Won, board.Status);
+        }
+
+        [Test]
+        public void NoWin_WrongFlag()
+        {
+            // 3x3x3 with 1 mine — flag the mine AND a non-mine → Playing (wrong flag blocks win)
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(3, mines);
+
+            board.ToggleFlag(new Coord3(1, 1, 1)); // incorrect flag first
+            board.ToggleFlag(new Coord3(0, 0, 0)); // correct flag
+            Assert.AreEqual(GameStatus.Playing, board.Status,
+                "Flagging a non-mine cell should prevent flag-win even if all mines are flagged");
+        }
+
+        [Test]
+        public void NoWin_PartialFlags()
+        {
+            // 3x3x3 with 3 mines — flag only 2 of 3 → Playing
+            var mines = new[] { new Coord3(0, 0, 0), new Coord3(1, 1, 1), new Coord3(2, 2, 2) };
+            var board = new Board(3, mines);
+
+            board.ToggleFlag(new Coord3(0, 0, 0));
+            board.ToggleFlag(new Coord3(1, 1, 1));
+            Assert.AreEqual(GameStatus.Playing, board.Status,
+                "Flagging only some mines should not trigger win");
+        }
     }
 }
