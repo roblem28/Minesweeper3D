@@ -36,10 +36,13 @@ namespace Minesweeper3D.Unity
         private Camera _cam;
         private bool _enabled = true;
 
-        // --- Desktop hover/double-click state ---
+        // --- Desktop hover state ---
         private Coord3? _lastHoveredCell;
-        private float _lastLeftClickTime;
-        private Coord3? _lastLeftClickCoord;
+
+        // --- Pending tap/click (delayed to detect double) ---
+        private float _pendingTapTime;
+        private Coord3? _pendingTapCoord;
+        private bool _pendingIsDesktop;
 
         // --- Touch state ---
         private float _touchStartTime;
@@ -49,16 +52,11 @@ namespace Minesweeper3D.Unity
         private bool _wasTwoFinger;
         private bool _isHighlighting;
 
-        // --- Mobile double-tap state ---
-        private float _lastTapTime;
-        private Coord3? _lastTapCoord;
-
         // --- Constants ---
         private const float HighlightPressDuration = 0.3f;
         private const float TapMoveTolerance = 15f;
         private const float SwipeThreshold = 50f;
         private const float PinchThreshold = 20f;
-        private const float DoubleClickWindow = 0.25f;
         private const float DoubleTapWindow = 0.25f;
 
         public void Init(Camera cam)
@@ -81,6 +79,7 @@ namespace Minesweeper3D.Unity
                     _isHighlighting = false;
                     OnHighlightEnd?.Invoke();
                 }
+                _pendingTapCoord = null;
             }
         }
 
@@ -97,6 +96,13 @@ namespace Minesweeper3D.Unity
         private void Update()
         {
             if (!_enabled) return;
+
+            // Flush pending tap/click if double-tap window expired
+            if (_pendingTapCoord.HasValue && Time.time - _pendingTapTime >= DoubleTapWindow)
+            {
+                OnReveal?.Invoke(_pendingTapCoord.Value);
+                _pendingTapCoord = null;
+            }
 
             if (Touch.activeTouches.Count > 0)
                 HandleTouch();
@@ -149,18 +155,23 @@ namespace Minesweeper3D.Unity
                 {
                     if (left)
                     {
-                        if (Time.time - _lastLeftClickTime < DoubleClickWindow
-                            && _lastLeftClickCoord.HasValue
-                            && _lastLeftClickCoord.Value.Equals(coord))
+                        if (_pendingTapCoord.HasValue && _pendingTapCoord.Value.Equals(coord))
                         {
+                            // Second click on same cell — chord
+                            _pendingTapCoord = null;
                             OnDoubleClick?.Invoke(coord);
-                            _lastLeftClickTime = 0f;
                         }
                         else
                         {
-                            OnReveal?.Invoke(coord);
-                            _lastLeftClickTime = Time.time;
-                            _lastLeftClickCoord = coord;
+                            // First click — delay to check for double
+                            if (_pendingTapCoord.HasValue)
+                            {
+                                // Flush previous pending tap on different cell
+                                OnReveal?.Invoke(_pendingTapCoord.Value);
+                            }
+                            _pendingTapCoord = coord;
+                            _pendingTapTime = Time.time;
+                            _pendingIsDesktop = true;
                         }
                     }
                     else
@@ -264,19 +275,22 @@ namespace Minesweeper3D.Unity
                         {
                             if (TryRaycastCell(touch.screenPosition, out Coord3 coord))
                             {
-                                // Double-tap detection
-                                if (Time.time - _lastTapTime < DoubleTapWindow
-                                    && _lastTapCoord.HasValue
-                                    && _lastTapCoord.Value.Equals(coord))
+                                if (_pendingTapCoord.HasValue && _pendingTapCoord.Value.Equals(coord))
                                 {
+                                    // Second tap on same cell — chord
+                                    _pendingTapCoord = null;
                                     OnDoubleTap?.Invoke(coord);
-                                    _lastTapTime = 0f;
                                 }
                                 else
                                 {
-                                    OnReveal?.Invoke(coord);
-                                    _lastTapTime = Time.time;
-                                    _lastTapCoord = coord;
+                                    // First tap — delay to check for double
+                                    if (_pendingTapCoord.HasValue)
+                                    {
+                                        OnReveal?.Invoke(_pendingTapCoord.Value);
+                                    }
+                                    _pendingTapCoord = coord;
+                                    _pendingTapTime = Time.time;
+                                    _pendingIsDesktop = false;
                                 }
                             }
                         }
