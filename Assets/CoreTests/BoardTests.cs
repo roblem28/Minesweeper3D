@@ -174,6 +174,77 @@ namespace Minesweeper3D.CoreTests
             Assert.AreEqual(RevealResult.Flagged, result);
         }
 
+        // --- Cross-layer adjacency ---
+
+        [Test]
+        public void CrossLayer_MinesOnDifferentZLayers_CountedCorrectly()
+        {
+            // 4x4x4 grid. Place mines on z=0 and z=2, check cell at z=1 counts both.
+            // Mine A at (1,1,0) — directly below (1,1,1) on z-axis
+            // Mine B at (2,2,2) — diagonal neighbor of (1,1,1) across z
+            // Mine C at (0,0,0) — diagonal neighbor of (1,1,1) across z
+            var mines = new[]
+            {
+                new Coord3(1, 1, 0),  // directly below center on z
+                new Coord3(2, 2, 2),  // diagonal above
+                new Coord3(0, 0, 0),  // diagonal below
+            };
+            var board = new Board(4, mines);
+
+            // Cell (1,1,1) should see all 3 mines as neighbors
+            int count = board.GetCount(new Coord3(1, 1, 1));
+            Assert.AreEqual(3, count,
+                "Cell (1,1,1) should count mines at (1,1,0), (2,2,2), and (0,0,0) as neighbors");
+
+            // Cell (1,1,0) is a mine — its count should include mine at (0,0,0) [diagonal] but NOT (2,2,2) [too far]
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 0)),
+                "Mine at (1,1,0) should see 1 neighboring mine: (0,0,0)");
+
+            // Cell (1,1,2) should see mines at (2,2,2) [diagonal dz=0 same layer? no, dz=0 for z=2]
+            // Wait: (1,1,2) neighbors include (2,2,2) [dx=1,dy=1,dz=0] — but that's same layer not cross.
+            // (1,1,2) also neighbors (1,1,0)? No: dz = 0-2 = -2, out of range.
+            // So (1,1,2) sees only (2,2,2) as mine neighbor (dx=1,dy=1,dz=0 — same layer).
+            // Actually (2,2,2) is at z=2, (1,1,2) is at z=2: dz=0, dx=1, dy=1 → neighbor. Count = 1.
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 2)),
+                "Cell (1,1,2) should see 1 mine: (2,2,2) same-layer diagonal");
+        }
+
+        [Test]
+        public void CrossLayer_MineDirectlyAbove_Counted()
+        {
+            // Simple test: mine at (2,2,3), cell at (2,2,2) should count it (dz=+1)
+            var mines = new[] { new Coord3(2, 2, 3) };
+            var board = new Board(4, mines);
+            Assert.AreEqual(1, board.GetCount(new Coord3(2, 2, 2)),
+                "Cell directly below mine (dz=1) must count it");
+        }
+
+        [Test]
+        public void CrossLayer_MineDirectlyBelow_Counted()
+        {
+            // Mine at (2,2,1), cell at (2,2,2) should count it (dz=-1)
+            var mines = new[] { new Coord3(2, 2, 1) };
+            var board = new Board(4, mines);
+            Assert.AreEqual(1, board.GetCount(new Coord3(2, 2, 2)),
+                "Cell directly above mine (dz=-1) must count it");
+        }
+
+        [Test]
+        public void CrossLayer_AllDzDirections_CountedFromCenter()
+        {
+            // Place mines in all 3 z-layers adjacent to (2,2,2): z=1, z=2, z=3
+            // One mine per layer, all should be counted
+            var mines = new[]
+            {
+                new Coord3(1, 1, 1),  // dz=-1, dx=-1, dy=-1
+                new Coord3(3, 3, 2),  // dz=0, dx=+1, dy=+1 (same layer)
+                new Coord3(2, 3, 3),  // dz=+1, dx=0, dy=+1
+            };
+            var board = new Board(4, mines);
+            Assert.AreEqual(3, board.GetCount(new Coord3(2, 2, 2)),
+                "Cell (2,2,2) should count all 3 mines across z-layers");
+        }
+
         // --- Bounds ---
 
         [Test]
