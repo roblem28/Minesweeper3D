@@ -88,8 +88,8 @@ namespace Minesweeper3D.Unity
             _label = labelObj.AddComponent<TextMesh>();
             _label.alignment = TextAlignment.Center;
             _label.anchor = TextAnchor.MiddleCenter;
-            _label.characterSize = 0.35f;
-            _label.fontSize = 64;
+            _label.characterSize = 0.315f;
+            _label.fontSize = 58;
             _label.fontStyle = FontStyle.Bold;
             _label.text = "";
 

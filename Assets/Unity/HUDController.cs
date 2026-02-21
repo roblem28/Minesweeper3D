@@ -50,8 +50,6 @@ namespace Minesweeper3D.Unity
         private GameObject _tutorialOverlay;
         private static readonly string TutorialShownKey = "MineSweep3D_TutorialShown";
 
-        // Controls hint
-        private TextMeshProUGUI _controlsHint;
 
         // Remaining mine count (Feature 2)
         private TextMeshProUGUI _remainingInfoText;
@@ -132,9 +130,6 @@ namespace Minesweeper3D.Unity
             // === REMAINING INFO (below info bar) ===
             BuildRemainingInfo();
 
-            // === CONTROLS HINT (bottom-left) ===
-            BuildControlsHint();
-
             // === TUTORIAL OVERLAY (one-time) ===
             BuildTutorialOverlay();
 
@@ -200,7 +195,7 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.sizeDelta = new Vector2(160f, 400f);
+            rt.sizeDelta = new Vector2(176f, 400f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
@@ -209,7 +204,7 @@ namespace Minesweeper3D.Unity
 
             var layout = panel.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(4, 4, 4, 4);
-            layout.spacing = 3f;
+            layout.spacing = 6f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
@@ -226,7 +221,7 @@ namespace Minesweeper3D.Unity
             {
                 int idx = i;
                 string name = labels[i];
-                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(150f, 60f), 24, () =>
+                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(165f, 66f), 26, () =>
                 {
                     Debug.Log($"HUD CLICK: {name}");
                     _game.ApplyDifficulty(diffs[idx]);
@@ -236,7 +231,7 @@ namespace Minesweeper3D.Unity
             }
 
             // Hint button
-            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(150f, 60f), 24, () =>
+            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(165f, 66f), 26, () =>
             {
                 Debug.Log("HUD CLICK: Hint");
                 OnHintClicked();
@@ -245,7 +240,7 @@ namespace Minesweeper3D.Unity
             _hintBtnText = hintGo.GetComponentInChildren<TextMeshProUGUI>();
 
             // New Game button
-            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(150f, 60f), 24, () =>
+            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(165f, 66f), 26, () =>
             {
                 Debug.Log("HUD CLICK: New Game");
                 _game.RestartGame();
@@ -254,7 +249,7 @@ namespace Minesweeper3D.Unity
             _newGameBtn = ngGo.GetComponent<Button>();
 
             // Quit button
-            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(150f, 60f), 24, () =>
+            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(165f, 66f), 26, () =>
             {
                 Debug.Log("HUD CLICK: Quit");
 #if UNITY_EDITOR
@@ -265,7 +260,7 @@ namespace Minesweeper3D.Unity
             });
 
             // Mobile flag toggle (since long press is now highlight, not flag)
-            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(150f, 60f), 24, () =>
+            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(165f, 66f), 26, () =>
             {
                 _flagMode = !_flagMode;
                 _flagToggleBg.color = _flagMode ? ActiveColor : InactiveColor;
@@ -522,25 +517,6 @@ namespace Minesweeper3D.Unity
             }
             img.color = original;
             _pulseCoroutine = null;
-        }
-
-        private void BuildControlsHint()
-        {
-            var obj = new GameObject("ControlsHint");
-            obj.transform.SetParent(_safeAreaRoot, false);
-            var rt = obj.AddComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.zero;
-            rt.pivot = Vector2.zero;
-            rt.sizeDelta = new Vector2(700f, 40f);
-            rt.anchoredPosition = new Vector2(10f, 10f);
-            _controlsHint = obj.AddComponent<TextMeshProUGUI>();
-            _controlsHint.text = Application.isMobilePlatform
-                ? "Tap: Reveal | Hold: Highlight | 2-Tap: Chord | Flag: Toggle | Drag: Orbit"
-                : "LMB: Reveal | RMB: Flag | Hover: Highlight | 2-Click: Chord | Scroll: Slice";
-            _controlsHint.fontSize = 20;
-            _controlsHint.color = new Color(0.7f, 0.7f, 0.7f, 0.5f);
-            _controlsHint.raycastTarget = false;
         }
 
         private void LogAllButtons()
