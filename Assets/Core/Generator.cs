@@ -11,20 +11,17 @@ namespace Minesweeper3D.Core
     {
         /// <summary>
         /// Generate a board with mines placed randomly (seeded),
-        /// guaranteeing first-click cell and its 26 neighbors are safe.
+        /// guaranteeing first-click cell and its neighbors are safe.
+        /// Exclusion zone uses the board's adjacency mode.
         /// </summary>
-        /// <param name="size">Side length N for NxNxN grid.</param>
-        /// <param name="mineCount">Number of mines to place.</param>
-        /// <param name="firstClick">First click coordinate (protected zone).</param>
-        /// <param name="seed">RNG seed for determinism.</param>
-        /// <returns>A new Board instance.</returns>
-        public static Board Generate(int size, int mineCount, Coord3 firstClick, int seed)
+        public static Board Generate(int size, int mineCount, Coord3 firstClick, int seed,
+                                     AdjacencyMode adjacency = AdjacencyMode.Full26)
         {
             int total = size * size * size;
 
-            // Build exclusion set: firstClick + its 26 neighbors
+            // Build exclusion set: firstClick + its neighbors (mode-dependent)
             var excluded = new HashSet<int>();
-            var tempBoard = new Board(size, Array.Empty<Coord3>());
+            var tempBoard = new Board(size, Array.Empty<Coord3>(), adjacency);
 
             excluded.Add(tempBoard.FlatIndex(firstClick));
             foreach (var n in tempBoard.GetNeighbors(firstClick))
@@ -57,7 +54,7 @@ namespace Minesweeper3D.Core
                 mineCoords.Add(tempBoard.FromFlat(idx));
             }
 
-            return new Board(size, mineCoords);
+            return new Board(size, mineCoords, adjacency);
         }
     }
 }

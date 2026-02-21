@@ -18,6 +18,15 @@ namespace Minesweeper3D.Core
         OutOfBounds
     }
 
+    /// <summary>Adjacency mode for neighbor enumeration.</summary>
+    public enum AdjacencyMode
+    {
+        /// <summary>All 26 surrounding cells (faces + edges + corners).</summary>
+        Full26,
+        /// <summary>Only the 6 face-adjacent cells (no diagonals).</summary>
+        Faces6
+    }
+
     /// <summary>Overall game status.</summary>
     public enum GameStatus
     {

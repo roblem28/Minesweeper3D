@@ -10,6 +10,7 @@ namespace Minesweeper3D.Core
     public class Board
     {
         public readonly int Size;
+        public readonly AdjacencyMode Adjacency;
         public GameStatus Status { get; private set; }
 
         // Flat arrays indexed by FlatIndex(x,y,z)
@@ -22,15 +23,26 @@ namespace Minesweeper3D.Core
         private int _flagCount;
         private int _correctFlagCount;
 
+        // The 6 face-adjacent directions (±1 on exactly one axis)
+        private static readonly int[,] Faces6Dirs =
+        {
+            { 1, 0, 0}, {-1, 0, 0},
+            { 0, 1, 0}, { 0,-1, 0},
+            { 0, 0, 1}, { 0, 0,-1}
+        };
+
         /// <summary>Create a board of given size with mines pre-placed.</summary>
         /// <param name="size">Side length (NxNxN).</param>
         /// <param name="mineCoords">Coordinates of mines.</param>
-        public Board(int size, IEnumerable<Coord3> mineCoords)
+        /// <param name="adjacency">Neighbor mode (default Full26).</param>
+        public Board(int size, IEnumerable<Coord3> mineCoords,
+                     AdjacencyMode adjacency = AdjacencyMode.Full26)
         {
             if (size < 1)
                 throw new ArgumentException("Size must be >= 1", nameof(size));
 
             Size = size;
+            Adjacency = adjacency;
             int total = size * size * size;
             _mines = new bool[total];
             _states = new CellState[total];
@@ -120,9 +132,12 @@ namespace Minesweeper3D.Core
             }
         }
 
-        /// <summary>Get all 26-adjacent neighbors in bounds.</summary>
+        /// <summary>Get neighbors in bounds, respecting adjacency mode.</summary>
         public List<Coord3> GetNeighbors(Coord3 c)
         {
+            if (Adjacency == AdjacencyMode.Faces6)
+                return GetFaces6Neighbors(c);
+
             var result = new List<Coord3>(26);
             for (int dx = -1; dx <= 1; dx++)
             for (int dy = -1; dy <= 1; dy++)
@@ -130,6 +145,20 @@ namespace Minesweeper3D.Core
             {
                 if (dx == 0 && dy == 0 && dz == 0) continue;
                 var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
+                if (InBounds(n))
+                    result.Add(n);
+            }
+            return result;
+        }
+
+        private List<Coord3> GetFaces6Neighbors(Coord3 c)
+        {
+            var result = new List<Coord3>(6);
+            for (int i = 0; i < 6; i++)
+            {
+                var n = new Coord3(c.X + Faces6Dirs[i, 0],
+                                   c.Y + Faces6Dirs[i, 1],
+                                   c.Z + Faces6Dirs[i, 2]);
                 if (InBounds(n))
                     result.Add(n);
             }
@@ -162,13 +191,8 @@ namespace Minesweeper3D.Core
             if (flagged != count) return false;
 
             bool anyRevealed = false;
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
+            foreach (var n in GetNeighbors(c))
             {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
-                if (!InBounds(n)) continue;
                 int ni = FlatIndex(n);
                 if (_states[ni] != CellState.Hidden) continue;
 
@@ -191,17 +215,13 @@ namespace Minesweeper3D.Core
             return anyRevealed;
         }
 
-        /// <summary>Count flagged neighbors of a cell. Zero allocation.</summary>
+        /// <summary>Count flagged neighbors of a cell.</summary>
         public int CountFlaggedNeighbors(Coord3 c)
         {
             int flagged = 0;
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
+            foreach (var n in GetNeighbors(c))
             {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
-                if (InBounds(n) && _states[FlatIndex(n)] == CellState.Flagged)
+                if (_states[FlatIndex(n)] == CellState.Flagged)
                     flagged++;
             }
             return flagged;
@@ -212,13 +232,10 @@ namespace Minesweeper3D.Core
         {
             hasAbove = false;
             hasBelow = false;
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
+            foreach (var n in GetNeighbors(c))
             {
+                int dz = n.Z - c.Z;
                 if (dz == 0) continue;
-                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
-                if (!InBounds(n)) continue;
                 var state = _states[FlatIndex(n)];
                 if (state == CellState.Hidden || state == CellState.Flagged)
                 {

@@ -133,7 +133,7 @@ namespace Minesweeper3D.Unity
             if (_firstClick)
             {
                 _firstClick = false;
-                Board = Generator.Generate(gridSize, mineCount, coord, seed);
+                Board = Generator.Generate(gridSize, mineCount, coord, seed, AdjacencyMode.Faces6);
                 Board.Reveal(coord);
                 _timer.StartTimer();
                 RefreshUI();
