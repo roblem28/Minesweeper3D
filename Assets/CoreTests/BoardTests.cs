@@ -8,64 +8,64 @@ namespace Minesweeper3D.CoreTests
     [TestFixture]
     public class BoardTests
     {
-        // --- Adjacency / Neighbor Counts ---
+        // --- Adjacency / Neighbor Counts (6-neighbor, faces only) ---
 
         [Test]
-        public void CornerCell_Has7Neighbors()
+        public void CornerCell_Has3Neighbors()
         {
             var board = new Board(4, System.Array.Empty<Coord3>());
             var neighbors = board.GetNeighbors(new Coord3(0, 0, 0));
-            Assert.AreEqual(7, neighbors.Count);
+            Assert.AreEqual(3, neighbors.Count);
         }
 
         [Test]
-        public void EdgeCell_Has11Neighbors()
+        public void EdgeCell_Has4Neighbors()
         {
-            // Edge: one axis at boundary, other two interior (for size >= 4)
+            // Edge: two axes at boundary, one interior
             var board = new Board(4, System.Array.Empty<Coord3>());
-            // (0,1,1) — x=0 boundary, y and z interior
-            var neighbors = board.GetNeighbors(new Coord3(0, 1, 1));
-            Assert.AreEqual(17, neighbors.Count);
-            // Actually for a face cell (one axis at 0), count is 17.
-            // True edge (two axes at boundary): (0,0,1)
-            var edgeNeighbors = board.GetNeighbors(new Coord3(0, 0, 1));
-            Assert.AreEqual(11, edgeNeighbors.Count);
+            var neighbors = board.GetNeighbors(new Coord3(0, 0, 1));
+            Assert.AreEqual(4, neighbors.Count);
         }
 
         [Test]
-        public void FaceCell_Has17Neighbors()
+        public void FaceCell_Has5Neighbors()
         {
             var board = new Board(4, System.Array.Empty<Coord3>());
             // (0,1,1) — only x at boundary
             var neighbors = board.GetNeighbors(new Coord3(0, 1, 1));
-            Assert.AreEqual(17, neighbors.Count);
+            Assert.AreEqual(5, neighbors.Count);
         }
 
         [Test]
-        public void CenterCell_Has26Neighbors()
+        public void CenterCell_Has6Neighbors()
         {
             var board = new Board(4, System.Array.Empty<Coord3>());
             var neighbors = board.GetNeighbors(new Coord3(1, 1, 1));
-            Assert.AreEqual(26, neighbors.Count);
+            Assert.AreEqual(6, neighbors.Count);
         }
 
         [Test]
-        public void NeighborCount_SingleMine_CorrectForAdjacentCells()
+        public void NeighborCount_SingleMine_CorrectForFaceAdjacentCells()
         {
             // Place one mine at (1,1,1) in a 3x3x3 grid
             var mines = new[] { new Coord3(1, 1, 1) };
             var board = new Board(3, mines);
 
-            // All 26 neighbors of (1,1,1) should have count == 1
-            var neighbors = board.GetNeighbors(new Coord3(1, 1, 1));
-            foreach (var n in neighbors)
-            {
-                Assert.AreEqual(1, board.GetCount(n),
-                    $"Cell {n} should have count 1 (adjacent to single mine at center)");
-            }
+            // 6 face neighbors of (1,1,1) should have count == 1
+            Assert.AreEqual(1, board.GetCount(new Coord3(0, 1, 1))); // -x
+            Assert.AreEqual(1, board.GetCount(new Coord3(2, 1, 1))); // +x
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 0, 1))); // -y
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 2, 1))); // +y
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 0))); // -z
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 2))); // +z
 
-            // The mine cell itself: count = 0 (it's a mine, count is of neighboring mines)
-            // Actually count should reflect neighboring mines, but (1,1,1) has no mine neighbors
+            // Diagonal cells should NOT count the mine
+            Assert.AreEqual(0, board.GetCount(new Coord3(0, 0, 0)),
+                "Diagonal cell should NOT count mine in 6-neighbor mode");
+            Assert.AreEqual(0, board.GetCount(new Coord3(2, 2, 2)),
+                "Diagonal cell should NOT count mine in 6-neighbor mode");
+
+            // The mine cell itself: no neighboring mines
             Assert.AreEqual(0, board.GetCount(new Coord3(1, 1, 1)));
         }
 
@@ -118,7 +118,6 @@ namespace Minesweeper3D.CoreTests
         public void FloodFill_StopsAtNumberedCells()
         {
             // 4x4x4 grid, mine at (3,3,3)
-            // Reveal (0,0,0) — flood fill should stop at cells with count > 0
             var mines = new[] { new Coord3(3, 3, 3) };
             var board = new Board(4, mines);
             board.Reveal(new Coord3(0, 0, 0));
@@ -126,13 +125,11 @@ namespace Minesweeper3D.CoreTests
             // (3,3,3) should NOT be revealed (it's a mine)
             Assert.AreEqual(CellState.Hidden, board.GetState(new Coord3(3, 3, 3)));
 
-            // Cells adjacent to the mine (count > 0) should be revealed by flood fill
-            // since they're reached but not expanded
-            var mineNeighbors = board.GetNeighbors(new Coord3(3, 3, 3));
-            foreach (var n in mineNeighbors)
+            // Face neighbors of the mine should be revealed (flood fill reveals numbered cells)
+            foreach (var n in board.GetNeighbors(new Coord3(3, 3, 3)))
             {
                 Assert.AreEqual(CellState.Revealed, board.GetState(n),
-                    $"Cell {n} adjacent to mine should still be revealed (flood fill reveals numbered cells, just doesn't expand through them)");
+                    $"Cell {n} adjacent to mine should be revealed by flood fill");
             }
         }
 
@@ -177,42 +174,9 @@ namespace Minesweeper3D.CoreTests
         // --- Cross-layer adjacency ---
 
         [Test]
-        public void CrossLayer_MinesOnDifferentZLayers_CountedCorrectly()
-        {
-            // 4x4x4 grid. Place mines on z=0 and z=2, check cell at z=1 counts both.
-            // Mine A at (1,1,0) — directly below (1,1,1) on z-axis
-            // Mine B at (2,2,2) — diagonal neighbor of (1,1,1) across z
-            // Mine C at (0,0,0) — diagonal neighbor of (1,1,1) across z
-            var mines = new[]
-            {
-                new Coord3(1, 1, 0),  // directly below center on z
-                new Coord3(2, 2, 2),  // diagonal above
-                new Coord3(0, 0, 0),  // diagonal below
-            };
-            var board = new Board(4, mines);
-
-            // Cell (1,1,1) should see all 3 mines as neighbors
-            int count = board.GetCount(new Coord3(1, 1, 1));
-            Assert.AreEqual(3, count,
-                "Cell (1,1,1) should count mines at (1,1,0), (2,2,2), and (0,0,0) as neighbors");
-
-            // Cell (1,1,0) is a mine — its count should include mine at (0,0,0) [diagonal] but NOT (2,2,2) [too far]
-            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 0)),
-                "Mine at (1,1,0) should see 1 neighboring mine: (0,0,0)");
-
-            // Cell (1,1,2) should see mines at (2,2,2) [diagonal dz=0 same layer? no, dz=0 for z=2]
-            // Wait: (1,1,2) neighbors include (2,2,2) [dx=1,dy=1,dz=0] — but that's same layer not cross.
-            // (1,1,2) also neighbors (1,1,0)? No: dz = 0-2 = -2, out of range.
-            // So (1,1,2) sees only (2,2,2) as mine neighbor (dx=1,dy=1,dz=0 — same layer).
-            // Actually (2,2,2) is at z=2, (1,1,2) is at z=2: dz=0, dx=1, dy=1 → neighbor. Count = 1.
-            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 2)),
-                "Cell (1,1,2) should see 1 mine: (2,2,2) same-layer diagonal");
-        }
-
-        [Test]
         public void CrossLayer_MineDirectlyAbove_Counted()
         {
-            // Simple test: mine at (2,2,3), cell at (2,2,2) should count it (dz=+1)
+            // Mine at (2,2,3), cell at (2,2,2) — face-adjacent on z-axis
             var mines = new[] { new Coord3(2, 2, 3) };
             var board = new Board(4, mines);
             Assert.AreEqual(1, board.GetCount(new Coord3(2, 2, 2)),
@@ -222,7 +186,7 @@ namespace Minesweeper3D.CoreTests
         [Test]
         public void CrossLayer_MineDirectlyBelow_Counted()
         {
-            // Mine at (2,2,1), cell at (2,2,2) should count it (dz=-1)
+            // Mine at (2,2,1), cell at (2,2,2) — face-adjacent on z-axis
             var mines = new[] { new Coord3(2, 2, 1) };
             var board = new Board(4, mines);
             Assert.AreEqual(1, board.GetCount(new Coord3(2, 2, 2)),
@@ -230,19 +194,31 @@ namespace Minesweeper3D.CoreTests
         }
 
         [Test]
-        public void CrossLayer_AllDzDirections_CountedFromCenter()
+        public void CrossLayer_DiagonalMine_NotCounted()
         {
-            // Place mines in all 3 z-layers adjacent to (2,2,2): z=1, z=2, z=3
-            // One mine per layer, all should be counted
+            // Mine at (0,0,0), cell at (1,1,1) — diagonal, NOT face-adjacent
+            var mines = new[] { new Coord3(0, 0, 0) };
+            var board = new Board(4, mines);
+            Assert.AreEqual(0, board.GetCount(new Coord3(1, 1, 1)),
+                "Diagonal mine should NOT be counted in 6-neighbor mode");
+        }
+
+        [Test]
+        public void CrossLayer_FaceAdjacentMines_AllCounted()
+        {
+            // Place mines on all 6 face directions from (2,2,2)
             var mines = new[]
             {
-                new Coord3(1, 1, 1),  // dz=-1, dx=-1, dy=-1
-                new Coord3(3, 3, 2),  // dz=0, dx=+1, dy=+1 (same layer)
-                new Coord3(2, 3, 3),  // dz=+1, dx=0, dy=+1
+                new Coord3(1, 2, 2), // -x
+                new Coord3(3, 2, 2), // +x
+                new Coord3(2, 1, 2), // -y
+                new Coord3(2, 3, 2), // +y
+                new Coord3(2, 2, 1), // -z
+                new Coord3(2, 2, 3), // +z
             };
             var board = new Board(4, mines);
-            Assert.AreEqual(3, board.GetCount(new Coord3(2, 2, 2)),
-                "Cell (2,2,2) should count all 3 mines across z-layers");
+            Assert.AreEqual(6, board.GetCount(new Coord3(2, 2, 2)),
+                "Cell (2,2,2) should count all 6 face-adjacent mines");
         }
 
         // --- Bounds ---
@@ -293,7 +269,7 @@ namespace Minesweeper3D.CoreTests
         [Test]
         public void NoWin_WrongFlag()
         {
-            // 3x3x3 with 1 mine — flag the mine AND a non-mine → Playing (wrong flag blocks win)
+            // 3x3x3 with 1 mine — flag the mine AND a non-mine → Playing
             var mines = new[] { new Coord3(0, 0, 0) };
             var board = new Board(3, mines);
 
@@ -315,28 +291,31 @@ namespace Minesweeper3D.CoreTests
             Assert.AreEqual(GameStatus.Playing, board.Status,
                 "Flagging only some mines should not trigger win");
         }
+
         // --- Chord Reveal ---
 
         [Test]
         public void ChordReveal_CorrectFlags_RevealsNeighbors()
         {
-            // 4x4x4, mines at (0,0,0) and (3,3,3). Reveal (1,1,1) which has count=1.
-            // Flag (0,0,0) only (not all mines). Chord (1,1,1) reveals unflagged hidden neighbors.
-            var mines = new[] { new Coord3(0, 0, 0), new Coord3(3, 3, 3) };
+            // 4x4x4, mines at (1,1,0) and (3,3,3). Cell (1,1,1) is face-adjacent to first mine, count=1.
+            // Two mines so flagging one doesn't trigger win-by-flagging.
+            var mines = new[] { new Coord3(1, 1, 0), new Coord3(3, 3, 3) };
             var board = new Board(4, mines);
+
+            // Reveal (1,1,1) — count is 1 so flood fill won't expand
             board.Reveal(new Coord3(1, 1, 1));
             Assert.AreEqual(CellState.Revealed, board.GetState(new Coord3(1, 1, 1)));
             Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 1)));
 
-            board.ToggleFlag(new Coord3(0, 0, 0));
-            Assert.AreEqual(GameStatus.Playing, board.Status); // game still playing (2nd mine unflagged)
+            board.ToggleFlag(new Coord3(1, 1, 0));
+            Assert.AreEqual(GameStatus.Playing, board.Status); // still playing (2nd mine unflagged)
             bool result = board.ChordReveal(new Coord3(1, 1, 1));
             Assert.IsTrue(result);
 
-            // All non-mine neighbors of (1,1,1) should be revealed
+            // All non-mine face-neighbors of (1,1,1) should be revealed
             foreach (var n in board.GetNeighbors(new Coord3(1, 1, 1)))
             {
-                if (n.Equals(new Coord3(0, 0, 0))) continue; // mine, flagged
+                if (n.Equals(new Coord3(1, 1, 0))) continue; // mine, flagged
                 Assert.AreEqual(CellState.Revealed, board.GetState(n),
                     $"Neighbor {n} should be revealed after chord");
             }
@@ -345,16 +324,16 @@ namespace Minesweeper3D.CoreTests
         [Test]
         public void ChordReveal_WrongFlag_CausesLoss()
         {
-            // 4x4x4, mine at (0,0,0). Cell (1,0,0) has count=1.
-            // Flag (0,1,0) (wrong!) instead of (0,0,0). Chord (1,0,0).
-            // This should reveal (0,0,0) which is a mine → loss.
-            var mines = new[] { new Coord3(0, 0, 0) };
+            // 4x4x4, mine at (1,1,0). Cell (1,1,1) has count=1.
+            // Flag (1,1,2) (wrong! — face-neighbor but not the mine). Chord (1,1,1).
+            // This should reveal (1,1,0) which is a mine → loss.
+            var mines = new[] { new Coord3(1, 1, 0) };
             var board = new Board(4, mines);
-            board.Reveal(new Coord3(1, 0, 0));
-            Assert.AreEqual(1, board.GetCount(new Coord3(1, 0, 0)));
+            board.Reveal(new Coord3(1, 1, 1));
+            Assert.AreEqual(1, board.GetCount(new Coord3(1, 1, 1)));
 
-            board.ToggleFlag(new Coord3(0, 1, 0)); // wrong flag
-            bool result = board.ChordReveal(new Coord3(1, 0, 0));
+            board.ToggleFlag(new Coord3(1, 1, 2)); // wrong flag (face-neighbor but not the mine)
+            bool result = board.ChordReveal(new Coord3(1, 1, 1));
             Assert.IsTrue(result);
             Assert.AreEqual(GameStatus.Lost, board.Status);
         }
@@ -362,8 +341,8 @@ namespace Minesweeper3D.CoreTests
         [Test]
         public void ChordReveal_NotEnoughFlags_DoesNothing()
         {
-            // 4x4x4, mine at (0,0,0). Cell (1,1,1) has count=1. Don't flag.
-            var mines = new[] { new Coord3(0, 0, 0) };
+            // 4x4x4, mine at (1,1,0). Cell (1,1,1) has count=1. Don't flag.
+            var mines = new[] { new Coord3(1, 1, 0) };
             var board = new Board(4, mines);
             board.Reveal(new Coord3(1, 1, 1));
 
@@ -377,15 +356,18 @@ namespace Minesweeper3D.CoreTests
         public void CountFlaggedNeighbors_ReturnsCorrectCount()
         {
             var board = new Board(3, System.Array.Empty<Coord3>());
-            board.ToggleFlag(new Coord3(0, 0, 0));
-            board.ToggleFlag(new Coord3(2, 2, 2));
-            board.ToggleFlag(new Coord3(0, 2, 0));
+            // Flag face-neighbors of (1,1,1)
+            board.ToggleFlag(new Coord3(0, 1, 1)); // -x face
+            board.ToggleFlag(new Coord3(2, 1, 1)); // +x face
+            board.ToggleFlag(new Coord3(1, 0, 1)); // -y face
 
-            // (1,1,1) has 26 neighbors. 3 are flagged: (0,0,0), (2,2,2), (0,2,0) — all adjacent
+            // (1,1,1) has 6 face neighbors, 3 are flagged
             Assert.AreEqual(3, board.CountFlaggedNeighbors(new Coord3(1, 1, 1)));
 
-            // (0,0,0) has 7 neighbors. None flagged except possibly (0,2,0) — not adjacent (dy=2)
-            Assert.AreEqual(0, board.CountFlaggedNeighbors(new Coord3(0, 0, 0)));
+            // Diagonal flag should NOT be counted
+            board.ToggleFlag(new Coord3(0, 0, 0)); // diagonal of (1,1,1)
+            Assert.AreEqual(3, board.CountFlaggedNeighbors(new Coord3(1, 1, 1)),
+                "Diagonal flags should not be counted in 6-neighbor mode");
         }
 
         // --- GetCrossSliceStatus ---
@@ -393,13 +375,13 @@ namespace Minesweeper3D.CoreTests
         [Test]
         public void GetCrossSliceStatus_DetectsAboveAndBelow()
         {
-            // 4x4x4, all cells hidden. Cell (1,1,1) has neighbors on z=0 (below) and z=2 (above).
+            // 4x4x4, all cells hidden. Cell (1,1,1) has face-neighbors on z=0 and z=2.
             var board = new Board(4, System.Array.Empty<Coord3>());
             board.GetCrossSliceStatus(new Coord3(1, 1, 1), out bool hasAbove, out bool hasBelow);
             Assert.IsTrue(hasAbove, "Should detect hidden cells on z=2 (above)");
             Assert.IsTrue(hasBelow, "Should detect hidden cells on z=0 (below)");
 
-            // Corner cell (0,0,0) has neighbors on z=1 (above) only
+            // Corner cell (0,0,0) has face-neighbor on z=1 (above) only
             board.GetCrossSliceStatus(new Coord3(0, 0, 0), out hasAbove, out hasBelow);
             Assert.IsTrue(hasAbove, "Should detect hidden cells above corner");
             Assert.IsFalse(hasBelow, "No cells below z=0");

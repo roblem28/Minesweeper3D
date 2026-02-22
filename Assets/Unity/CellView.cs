@@ -127,7 +127,6 @@ namespace Minesweeper3D.Unity
             // Build wireframe mesh (procedural geometry, no shader needed)
             _wireframeMesh = WireframeMeshBuilder.Build(1f, 0.018f);
 
-            Debug.Log($"[CellView] Opaque mat: {(_opaqueMat != null ? _opaqueMat.shader.name : "NULL")}, Ghost mat: {(_ghostMat != null ? _ghostMat.shader.name : "NULL")}");
         }
 
         /// <summary>Switch between opaque cube (active) and wireframe (ghost) rendering.</summary>

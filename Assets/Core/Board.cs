@@ -10,7 +10,6 @@ namespace Minesweeper3D.Core
     public class Board
     {
         public readonly int Size;
-        public readonly AdjacencyMode Adjacency;
         public GameStatus Status { get; private set; }
 
         // Flat arrays indexed by FlatIndex(x,y,z)
@@ -34,15 +33,12 @@ namespace Minesweeper3D.Core
         /// <summary>Create a board of given size with mines pre-placed.</summary>
         /// <param name="size">Side length (NxNxN).</param>
         /// <param name="mineCoords">Coordinates of mines.</param>
-        /// <param name="adjacency">Neighbor mode (default Full26).</param>
-        public Board(int size, IEnumerable<Coord3> mineCoords,
-                     AdjacencyMode adjacency = AdjacencyMode.Full26)
+        public Board(int size, IEnumerable<Coord3> mineCoords)
         {
             if (size < 1)
                 throw new ArgumentException("Size must be >= 1", nameof(size));
 
             Size = size;
-            Adjacency = adjacency;
             int total = size * size * size;
             _mines = new bool[total];
             _states = new CellState[total];
@@ -132,26 +128,8 @@ namespace Minesweeper3D.Core
             }
         }
 
-        /// <summary>Get neighbors in bounds, respecting adjacency mode.</summary>
+        /// <summary>Get face-adjacent neighbors (6-neighbor mode, no diagonals).</summary>
         public List<Coord3> GetNeighbors(Coord3 c)
-        {
-            if (Adjacency == AdjacencyMode.Faces6)
-                return GetFaces6Neighbors(c);
-
-            var result = new List<Coord3>(26);
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
-            {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
-                if (InBounds(n))
-                    result.Add(n);
-            }
-            return result;
-        }
-
-        private List<Coord3> GetFaces6Neighbors(Coord3 c)
         {
             var result = new List<Coord3>(6);
             for (int i = 0; i < 6; i++)

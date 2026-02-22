@@ -42,7 +42,7 @@ namespace Minesweeper3D.Editor
                 scenes = scenes,
                 locationPathName = apkPath,
                 target = BuildTarget.Android,
-                options = BuildOptions.Development
+                options = BuildOptions.None
             };
 
             Debug.Log($"[BuildHelper] Building APK to {apkPath} with {scenes.Length} scene(s)...");

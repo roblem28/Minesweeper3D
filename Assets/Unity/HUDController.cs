@@ -133,8 +133,6 @@ namespace Minesweeper3D.Unity
             // === TUTORIAL OVERLAY (one-time) ===
             BuildTutorialOverlay();
 
-            // === DIAGNOSTIC ===
-            LogAllButtons();
         }
 
         private void EnsureEventSystem()
@@ -145,14 +143,12 @@ namespace Minesweeper3D.Unity
                 var obj = new GameObject("EventSystem");
                 es = obj.AddComponent<EventSystem>();
                 obj.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
-                Debug.Log("PROOF: Created EventSystem + InputSystemUIInputModule");
             }
             if (es.GetComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>() == null)
             {
                 var legacy = es.GetComponent<StandaloneInputModule>();
                 if (legacy != null) DestroyImmediate(legacy);
                 es.gameObject.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
-                Debug.Log("PROOF: Added InputSystemUIInputModule to existing EventSystem");
             }
         }
 
@@ -223,7 +219,6 @@ namespace Minesweeper3D.Unity
                 string name = labels[i];
                 var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(165f, 66f), 26, () =>
                 {
-                    Debug.Log($"HUD CLICK: {name}");
                     _game.ApplyDifficulty(diffs[idx]);
                     RefreshDifficultyHighlight();
                 });
@@ -233,7 +228,6 @@ namespace Minesweeper3D.Unity
             // Hint button
             var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(165f, 66f), 26, () =>
             {
-                Debug.Log("HUD CLICK: Hint");
                 OnHintClicked();
             });
             _hintBtn = hintGo.GetComponent<Button>();
@@ -242,7 +236,6 @@ namespace Minesweeper3D.Unity
             // New Game button
             var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(165f, 66f), 26, () =>
             {
-                Debug.Log("HUD CLICK: New Game");
                 _game.RestartGame();
                 RefreshDifficultyHighlight();
             });
@@ -251,7 +244,6 @@ namespace Minesweeper3D.Unity
             // Quit button
             MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(165f, 66f), 26, () =>
             {
-                Debug.Log("HUD CLICK: Quit");
 #if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
 #else
@@ -517,22 +509,6 @@ namespace Minesweeper3D.Unity
             }
             img.color = original;
             _pulseCoroutine = null;
-        }
-
-        private void LogAllButtons()
-        {
-            var buttons = FindObjectsByType<Button>(FindObjectsSortMode.None);
-            Debug.Log($"PROOF: Total buttons={buttons.Length}");
-            foreach (var b in buttons)
-            {
-                int runtime = b.onClick.GetPersistentEventCount();
-                // Runtime listeners aren't counted by GetPersistentEventCount,
-                // so we test by checking the delegate list directly
-                var field = typeof(UnityEngine.Events.UnityEventBase)
-                    .GetField("m_Calls", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                string runtimeInfo = field != null ? "has-m_Calls" : "reflection-failed";
-                Debug.Log($"PROOF: Button '{b.gameObject.name}' active={b.gameObject.activeInHierarchy} interactable={b.interactable} persistent={runtime} {runtimeInfo}");
-            }
         }
 
         // ========== REFRESH ==========
