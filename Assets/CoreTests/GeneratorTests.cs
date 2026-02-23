@@ -82,5 +82,30 @@ namespace Minesweeper3D.CoreTests
 
             Assert.IsTrue(anyDiff, "Different seeds should (almost certainly) produce different boards");
         }
+
+        [Test]
+        public void Generate_DoesNotInstantWin_EasyDensity()
+        {
+            // 4^3 grid with 12 mines (18% density, matching Easy)
+            var click = new Coord3(2, 2, 2);
+            int size = 4;
+            int mines = 12;
+            int totalSafe = size * size * size - mines; // 52
+
+            for (int seed = 0; seed < 50; seed++)
+            {
+                var board = Generator.Generate(size, mines, click, seed);
+                Assert.AreEqual(mines, board.TotalMines(),
+                    $"Mine count mismatch (seed={seed})");
+
+                // Simulate first click
+                var simBoard = Generator.Generate(size, mines, click, seed);
+                simBoard.Reveal(click);
+                int revealed = simBoard.RevealedSafeCount;
+
+                Assert.LessOrEqual(revealed, (int)(totalSafe * 0.60f),
+                    $"First click revealed {revealed}/{totalSafe} safe cells — too many (seed={seed})");
+            }
+        }
     }
 }

@@ -13,7 +13,27 @@ namespace Minesweeper3D.Core
         /// Generate a board with mines placed randomly (seeded),
         /// guaranteeing first-click cell and its 6 face-neighbors are safe.
         /// </summary>
+        private const int MaxRegenerationAttempts = 50;
+        private const float MaxFirstClickRevealRatio = 0.60f;
+
         public static Board Generate(int size, int mineCount, Coord3 firstClick, int seed)
+        {
+            for (int attempt = 0; attempt < MaxRegenerationAttempts; attempt++)
+            {
+                var board = GenerateBoard(size, mineCount, firstClick, seed + attempt);
+
+                // Simulate first click to check if it reveals too many cells
+                int totalSafe = size * size * size - mineCount;
+                int revealed = SimulateReveal(board, firstClick);
+                if (revealed <= (int)(totalSafe * MaxFirstClickRevealRatio))
+                    return board;
+            }
+
+            // Accept the last attempt if all exceeded the threshold
+            return GenerateBoard(size, mineCount, firstClick, seed + MaxRegenerationAttempts - 1);
+        }
+
+        private static Board GenerateBoard(int size, int mineCount, Coord3 firstClick, int seed)
         {
             int total = size * size * size;
 
@@ -53,6 +73,28 @@ namespace Minesweeper3D.Core
             }
 
             return new Board(size, mineCoords);
+        }
+
+        /// <summary>
+        /// Simulate a reveal at the given coord and return how many safe cells would be revealed.
+        /// Does not mutate the board — creates a temporary copy for simulation.
+        /// </summary>
+        private static int SimulateReveal(Board board, Coord3 click)
+        {
+            // Create a duplicate board for simulation
+            int size = board.Size;
+            var mineCoords = new List<Coord3>();
+            for (int z = 0; z < size; z++)
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var c = new Coord3(x, y, z);
+                if (board.IsMine(c)) mineCoords.Add(c);
+            }
+
+            var simBoard = new Board(size, mineCoords);
+            simBoard.Reveal(click);
+            return simBoard.RevealedSafeCount;
         }
     }
 }

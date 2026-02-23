@@ -211,10 +211,10 @@ namespace Minesweeper3D.Unity
             };
             float density = diff switch
             {
-                Difficulty.Easy   => 0.10f,
-                Difficulty.Medium => 0.14f,
-                Difficulty.Hard   => 0.17f,
-                _ => 0.14f
+                Difficulty.Easy   => 0.18f,
+                Difficulty.Medium => 0.20f,
+                Difficulty.Hard   => 0.22f,
+                _ => 0.20f
             };
             int mines = Mathf.Max(1, Mathf.RoundToInt(size * size * size * density));
             RestartWithSettings(size, mines);
