@@ -54,6 +54,7 @@ namespace Minesweeper3D.Unity
 
         // --- Constants ---
         private const float HighlightPressDuration = 0.3f;
+        private const float LongPressFlagDuration = 0.5f;
         private const float TapMoveTolerance = 15f;
         private const float SwipeThreshold = 50f;
         private const float PinchThreshold = 20f;
@@ -262,16 +263,27 @@ namespace Minesweeper3D.Unity
 
                 case UnityEngine.InputSystem.TouchPhase.Ended:
                 {
+                    float holdDuration = Time.time - _touchStartTime;
+
                     if (_isHighlighting)
                     {
                         OnHighlightEnd?.Invoke();
                         _isHighlighting = false;
+
+                        // Long press >= 0.5s on a cell = flag
+                        if (!_touchMoved && holdDuration >= LongPressFlagDuration)
+                        {
+                            if (!IsPointerOverUI() && TryRaycastCell(_touchStartPos, out Coord3 flagCoord))
+                            {
+                                Debug.Log("LONG PRESS at " + flagCoord);
+                                OnFlag?.Invoke(flagCoord);
+                            }
+                        }
                         break;
                     }
                     if (!_touchMoved && !IsPointerOverUI())
                     {
-                        float duration = Time.time - _touchStartTime;
-                        if (duration < HighlightPressDuration)
+                        if (holdDuration < HighlightPressDuration)
                         {
                             if (TryRaycastCell(touch.screenPosition, out Coord3 coord))
                             {

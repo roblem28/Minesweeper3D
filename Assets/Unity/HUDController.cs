@@ -160,11 +160,11 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(0f, 1f);
             rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(0f, 70f);
+            rt.sizeDelta = new Vector2(0f, 80f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
-            bg.color = new Color(0.1f, 0.1f, 0.18f, 0.7f);
+            bg.color = new Color(0.102f, 0.102f, 0.227f, 0.7f); // #1A1A3A
             bg.raycastTarget = false;
 
             var layout = panel.AddComponent<HorizontalLayoutGroup>();
@@ -176,11 +176,11 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            _sliceText  = MakeLabel(panel.transform, "SliceText",  "Slice 1/6",      28, 40f);
-            _mineText   = MakeLabel(panel.transform, "MineText",   "Mines: 10",      28, 40f);
-            _flagText   = MakeLabel(panel.transform, "FlagText",   "Flags: 0",       28, 40f);
-            _timerText  = MakeLabel(panel.transform, "TimerText",  "Time: 00:00",    28, 40f);
-            _statusText = MakeLabel(panel.transform, "StatusText", "Click to start", 28, 40f);
+            _sliceText  = MakeLabel(panel.transform, "SliceText",  "Slice 1/6",      32, 46f);
+            _mineText   = MakeLabel(panel.transform, "MineText",   "Mines: 10",      32, 46f);
+            _flagText   = MakeLabel(panel.transform, "FlagText",   "Flags: 0",       32, 46f);
+            _timerText  = MakeLabel(panel.transform, "TimerText",  "Time: 00:00",    32, 46f);
+            _statusText = MakeLabel(panel.transform, "StatusText", "Click to start", 32, 46f);
         }
 
         private void BuildButtonBar()
@@ -191,16 +191,16 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.sizeDelta = new Vector2(176f, 400f);
+            rt.sizeDelta = new Vector2(202f, 400f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
-            bg.color = new Color(0.1f, 0.1f, 0.18f, 0.5f);
+            bg.color = new Color(0.102f, 0.102f, 0.227f, 0.5f); // #1A1A3A
             bg.raycastTarget = false;
 
             var layout = panel.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(4, 4, 4, 4);
-            layout.spacing = 6f;
+            layout.padding = new RectOffset(6, 6, 6, 6);
+            layout.spacing = 8f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
@@ -210,14 +210,14 @@ namespace Minesweeper3D.Unity
             var fitter = panel.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-            // Difficulty buttons
+            // Difficulty buttons (190x76, fontSize 30)
             string[] labels = { "Easy", "Medium", "Hard" };
             Difficulty[] diffs = { Difficulty.Easy, Difficulty.Medium, Difficulty.Hard };
             for (int i = 0; i < 3; i++)
             {
                 int idx = i;
                 string name = labels[i];
-                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(165f, 66f), 26, () =>
+                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(190f, 76f), 30, () =>
                 {
                     _game.ApplyDifficulty(diffs[idx]);
                     RefreshDifficultyHighlight();
@@ -226,7 +226,7 @@ namespace Minesweeper3D.Unity
             }
 
             // Hint button
-            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(165f, 66f), 26, () =>
+            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(190f, 76f), 30, () =>
             {
                 OnHintClicked();
             });
@@ -234,7 +234,7 @@ namespace Minesweeper3D.Unity
             _hintBtnText = hintGo.GetComponentInChildren<TextMeshProUGUI>();
 
             // New Game button
-            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(165f, 66f), 26, () =>
+            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(190f, 76f), 30, () =>
             {
                 _game.RestartGame();
                 RefreshDifficultyHighlight();
@@ -242,7 +242,7 @@ namespace Minesweeper3D.Unity
             _newGameBtn = ngGo.GetComponent<Button>();
 
             // Quit button
-            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(165f, 66f), 26, () =>
+            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(190f, 76f), 30, () =>
             {
 #if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
@@ -251,13 +251,14 @@ namespace Minesweeper3D.Unity
 #endif
             });
 
-            // Mobile flag toggle (since long press is now highlight, not flag)
-            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(165f, 66f), 26, () =>
+            // Mobile flag toggle — red button
+            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(190f, 76f), 30, () =>
             {
                 _flagMode = !_flagMode;
-                _flagToggleBg.color = _flagMode ? ActiveColor : InactiveColor;
+                _flagToggleBg.color = _flagMode ? FlagActiveColor : FlagInactiveColor;
             });
             _flagToggleBg = flagGo.GetComponent<Image>();
+            _flagToggleBg.color = FlagInactiveColor; // start as darker red
 
             RefreshDifficultyHighlight();
         }
@@ -410,7 +411,7 @@ namespace Minesweeper3D.Unity
             textRt.pivot = new Vector2(0.5f, 0.5f);
             textRt.sizeDelta = new Vector2(700f, 250f);
             var tmp = textGo.AddComponent<TextMeshProUGUI>();
-            tmp.text = "Tap to reveal  |  Long press to flag  |  Arrows to change slice";
+            tmp.text = "Tap to reveal  |  Hold to flag  |  Arrows to change slice";
             tmp.fontSize = 30;
             tmp.color = Color.white;
             tmp.alignment = TextAlignmentOptions.Center;
@@ -584,8 +585,10 @@ namespace Minesweeper3D.Unity
 
         // ========== DIFFICULTY HIGHLIGHT ==========
 
-        private static readonly Color ActiveColor = new Color(0.3f, 0.55f, 0.85f, 1f);
-        private static readonly Color InactiveColor = new Color(0.25f, 0.25f, 0.30f, 1f);
+        private static readonly Color ActiveColor = new Color(0.15f, 0.35f, 0.65f, 1f);    // brighter dark blue for active difficulty
+        private static readonly Color InactiveColor = new Color(0.102f, 0.227f, 0.416f, 1f); // #1A3A6A dark blue
+        private static readonly Color FlagActiveColor = new Color(0.80f, 0.13f, 0.13f, 1f);  // #CC2222 red
+        private static readonly Color FlagInactiveColor = new Color(0.60f, 0.10f, 0.10f, 1f); // darker red when off
 
         private void RefreshDifficultyHighlight()
         {
@@ -642,6 +645,41 @@ namespace Minesweeper3D.Unity
 
         // ========== UI FACTORY ==========
 
+        private static Sprite _roundedBtnSprite;
+
+        private static Sprite GetRoundedButtonSprite()
+        {
+            if (_roundedBtnSprite != null) return _roundedBtnSprite;
+
+            int w = 64, h = 64, r = 12;
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            for (int py = 0; py < h; py++)
+            {
+                for (int px = 0; px < w; px++)
+                {
+                    float dx = Mathf.Max(0, Mathf.Max(r - px, px - (w - 1 - r)));
+                    float dy = Mathf.Max(0, Mathf.Max(r - py, py - (h - 1 - r)));
+                    float dist = Mathf.Sqrt(dx * dx + dy * dy);
+                    float alpha = Mathf.Clamp01(r - dist + 0.5f);
+                    tex.SetPixel(px, py, new Color(1f, 1f, 1f, alpha));
+                }
+            }
+            tex.Apply();
+            tex.filterMode = FilterMode.Bilinear;
+
+            _roundedBtnSprite = Sprite.Create(
+                tex,
+                new Rect(0, 0, w, h),
+                new Vector2(0.5f, 0.5f),
+                100f,
+                0,
+                SpriteMeshType.FullRect,
+                new Vector4(r, r, r, r)
+            );
+
+            return _roundedBtnSprite;
+        }
+
         private static TextMeshProUGUI MakeLabel(Transform parent, string name, string text, int fontSize, float height = 28f)
         {
             var go = new GameObject(name);
@@ -671,12 +709,23 @@ namespace Minesweeper3D.Unity
             le.preferredHeight = size.y;
 
             var img = go.AddComponent<Image>();
-            img.color = new Color(0.25f, 0.25f, 0.30f, 1f);
+            img.sprite = GetRoundedButtonSprite();
+            img.type = Image.Type.Sliced;
+            img.color = new Color(0.102f, 0.227f, 0.416f, 1f); // #1A3A6A dark blue
             img.raycastTarget = true;
 
             var btn = go.AddComponent<Button>();
             btn.targetGraphic = img;
             btn.navigation = new Navigation { mode = Navigation.Mode.None };
+
+            var colors = btn.colors;
+            colors.normalColor = new Color(0.102f, 0.227f, 0.416f, 1f);   // #1A3A6A
+            colors.highlightedColor = new Color(0.15f, 0.30f, 0.50f, 1f); // lighter blue
+            colors.pressedColor = new Color(0.08f, 0.16f, 0.32f, 1f);     // darker blue
+            colors.selectedColor = new Color(0.15f, 0.35f, 0.65f, 1f);    // active blue
+            colors.fadeDuration = 0.08f;
+            btn.colors = colors;
+
             btn.onClick.AddListener(onClick);
 
             var textGo = new GameObject("Text");
