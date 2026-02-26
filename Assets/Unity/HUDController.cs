@@ -63,6 +63,7 @@ namespace Minesweeper3D.Unity
         // Mobile flag toggle
         private bool _flagMode;
         private Image _flagToggleBg;
+        private Button _flagToggleBtn;
         public bool IsFlagMode => _flagMode;
 
         public void Init(GameController game, SliceController slice, InputManager input)
@@ -191,7 +192,7 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(0f, 0.5f);
             rt.anchorMax = new Vector2(0f, 0.5f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.sizeDelta = new Vector2(202f, 400f);
+            rt.sizeDelta = new Vector2(244f, 400f);
             rt.anchoredPosition = Vector2.zero;
 
             var bg = panel.AddComponent<Image>();
@@ -199,8 +200,8 @@ namespace Minesweeper3D.Unity
             bg.raycastTarget = false;
 
             var layout = panel.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(6, 6, 6, 6);
-            layout.spacing = 8f;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.spacing = 10f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
@@ -217,7 +218,7 @@ namespace Minesweeper3D.Unity
             {
                 int idx = i;
                 string name = labels[i];
-                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(190f, 76f), 30, () =>
+                var btn = MakeButton(panel.transform, $"Btn_{name}", name, new Vector2(228f, 91f), 36, () =>
                 {
                     _game.ApplyDifficulty(diffs[idx]);
                     RefreshDifficultyHighlight();
@@ -226,7 +227,7 @@ namespace Minesweeper3D.Unity
             }
 
             // Hint button
-            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(190f, 76f), 30, () =>
+            var hintGo = MakeButton(panel.transform, "Btn_Hint", "Hint", new Vector2(228f, 91f), 36, () =>
             {
                 OnHintClicked();
             });
@@ -234,7 +235,7 @@ namespace Minesweeper3D.Unity
             _hintBtnText = hintGo.GetComponentInChildren<TextMeshProUGUI>();
 
             // New Game button
-            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(190f, 76f), 30, () =>
+            var ngGo = MakeButton(panel.transform, "Btn_NewGame", "New Game", new Vector2(228f, 91f), 36, () =>
             {
                 _game.RestartGame();
                 RefreshDifficultyHighlight();
@@ -242,7 +243,7 @@ namespace Minesweeper3D.Unity
             _newGameBtn = ngGo.GetComponent<Button>();
 
             // Quit button
-            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(190f, 76f), 30, () =>
+            MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(228f, 91f), 36, () =>
             {
 #if UNITY_EDITOR
                 UnityEditor.EditorApplication.isPlaying = false;
@@ -252,13 +253,15 @@ namespace Minesweeper3D.Unity
             });
 
             // Mobile flag toggle — red button
-            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(190f, 76f), 30, () =>
+            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(228f, 91f), 36, () =>
             {
                 _flagMode = !_flagMode;
-                _flagToggleBg.color = _flagMode ? FlagActiveColor : FlagInactiveColor;
+                ApplyFlagButtonColors(_flagToggleBtn, _flagMode);
             });
             _flagToggleBg = flagGo.GetComponent<Image>();
-            _flagToggleBg.color = FlagInactiveColor; // start as darker red
+            _flagToggleBtn = flagGo.GetComponent<Button>();
+            // Apply flag-specific ColorBlock (inactive/normal state)
+            ApplyFlagButtonColors(_flagToggleBtn, false);
 
             RefreshDifficultyHighlight();
         }
@@ -293,7 +296,7 @@ namespace Minesweeper3D.Unity
             _endDifficulty = MakeLabel(_endPanel.transform, "EndDifficulty", "", 26, 36f);
             _endDifficulty.color = new Color(0.7f, 0.7f, 0.7f);
 
-            MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(280f, 65f), 24, () =>
+            MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(336f, 78f), 29, () =>
             {
                 _endPanel.SetActive(false);
                 _input?.SetEnabled(true);
@@ -312,7 +315,7 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(1f, 0.5f);
             rt.anchorMax = new Vector2(1f, 0.5f);
             rt.pivot = new Vector2(1f, 0.5f);
-            rt.sizeDelta = new Vector2(100f, 260f);
+            rt.sizeDelta = new Vector2(120f, 320f);
             rt.anchoredPosition = new Vector2(-5f, 0f);
 
             var bg = panel.AddComponent<Image>();
@@ -329,7 +332,7 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandHeight = false;
 
             // UP arrow
-            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(90f, 90f), 24, () =>
+            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(108f, 108f), 29, () =>
             {
                 _game.HandleSliceChangePublic(1);
             });
@@ -339,7 +342,7 @@ namespace Minesweeper3D.Unity
             _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(90f, 60f);
 
             // DOWN arrow
-            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(90f, 90f), 24, () =>
+            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(108f, 108f), 29, () =>
             {
                 _game.HandleSliceChangePublic(-1);
             });
@@ -585,10 +588,10 @@ namespace Minesweeper3D.Unity
 
         // ========== DIFFICULTY HIGHLIGHT ==========
 
-        private static readonly Color ActiveColor = new Color(0.15f, 0.35f, 0.65f, 1f);    // brighter dark blue for active difficulty
-        private static readonly Color InactiveColor = new Color(0.102f, 0.227f, 0.416f, 1f); // #1A3A6A dark blue
-        private static readonly Color FlagActiveColor = new Color(0.80f, 0.13f, 0.13f, 1f);  // #CC2222 red
-        private static readonly Color FlagInactiveColor = new Color(0.60f, 0.10f, 0.10f, 1f); // darker red when off
+        private static readonly Color ActiveColor = new Color(0.2f, 0.5f, 0.8f, 1f);        // bright blue for selected difficulty
+        private static readonly Color InactiveColor = new Color(0.1f, 0.23f, 0.42f, 1f);    // #1A3B6B dark blue
+        private static readonly Color FlagActiveColor = new Color(1f, 0.3f, 0.3f, 1f);       // bright red when flag mode active
+        private static readonly Color FlagInactiveColor = new Color(0.8f, 0.13f, 0.13f, 1f); // #CC2222 red normal
 
         private void RefreshDifficultyHighlight()
         {
@@ -596,8 +599,48 @@ namespace Minesweeper3D.Unity
             for (int i = 0; i < 3; i++)
             {
                 bool on = !_game.IsCustomGame && diffs[i] == _game.CurrentDifficulty;
-                _difficultyButtons[i].GetComponent<Image>().color = on ? ActiveColor : InactiveColor;
+                var btn = _difficultyButtons[i];
+                var cb = btn.colors;
+                if (on)
+                {
+                    // Selected difficulty gets bright blue permanently
+                    cb.normalColor = ActiveColor;         // bright blue (0.2, 0.5, 0.8)
+                    cb.highlightedColor = new Color(0.25f, 0.55f, 0.85f, 1f);
+                    cb.pressedColor = new Color(0.15f, 0.4f, 0.7f, 1f);
+                    cb.selectedColor = ActiveColor;
+                }
+                else
+                {
+                    // Inactive buttons use standard dark blue
+                    cb.normalColor = InactiveColor;       // dark blue (0.1, 0.23, 0.42)
+                    cb.highlightedColor = new Color(0.15f, 0.33f, 0.55f, 1f);
+                    cb.pressedColor = new Color(0.08f, 0.18f, 0.33f, 1f);
+                    cb.selectedColor = new Color(0.2f, 0.5f, 0.8f, 1f);
+                }
+                cb.colorMultiplier = 1f;
+                btn.colors = cb;
             }
+        }
+
+        private void ApplyFlagButtonColors(Button btn, bool active)
+        {
+            var cb = btn.colors;
+            if (active)
+            {
+                cb.normalColor = FlagActiveColor;                        // bright red (1, 0.3, 0.3)
+                cb.highlightedColor = new Color(1f, 0.4f, 0.4f, 1f);
+                cb.pressedColor = new Color(0.8f, 0.2f, 0.2f, 1f);
+                cb.selectedColor = FlagActiveColor;
+            }
+            else
+            {
+                cb.normalColor = FlagInactiveColor;                      // red (0.8, 0.13, 0.13)
+                cb.highlightedColor = new Color(0.9f, 0.2f, 0.2f, 1f);
+                cb.pressedColor = new Color(0.6f, 0.1f, 0.1f, 1f);
+                cb.selectedColor = new Color(1f, 0.3f, 0.3f, 1f);
+            }
+            cb.colorMultiplier = 1f;
+            btn.colors = cb;
         }
 
         // ========== HINT ==========
@@ -711,20 +754,21 @@ namespace Minesweeper3D.Unity
             var img = go.AddComponent<Image>();
             img.sprite = GetRoundedButtonSprite();
             img.type = Image.Type.Sliced;
-            img.color = new Color(0.102f, 0.227f, 0.416f, 1f); // #1A3A6A dark blue
+            img.color = Color.white; // white so ColorBlock tinting works properly
             img.raycastTarget = true;
 
             var btn = go.AddComponent<Button>();
             btn.targetGraphic = img;
             btn.navigation = new Navigation { mode = Navigation.Mode.None };
 
-            var colors = btn.colors;
-            colors.normalColor = new Color(0.102f, 0.227f, 0.416f, 1f);   // #1A3A6A
-            colors.highlightedColor = new Color(0.15f, 0.30f, 0.50f, 1f); // lighter blue
-            colors.pressedColor = new Color(0.08f, 0.16f, 0.32f, 1f);     // darker blue
-            colors.selectedColor = new Color(0.15f, 0.35f, 0.65f, 1f);    // active blue
-            colors.fadeDuration = 0.08f;
-            btn.colors = colors;
+            var cb = btn.colors;
+            cb.normalColor = new Color(0.1f, 0.23f, 0.42f, 1f);      // dark blue #1A3B6B
+            cb.highlightedColor = new Color(0.15f, 0.33f, 0.55f, 1f); // lighter blue on hover
+            cb.pressedColor = new Color(0.08f, 0.18f, 0.33f, 1f);     // darker blue on press
+            cb.selectedColor = new Color(0.2f, 0.5f, 0.8f, 1f);       // bright blue when active
+            cb.colorMultiplier = 1f;
+            cb.fadeDuration = 0.08f;
+            btn.colors = cb;
 
             btn.onClick.AddListener(onClick);
 
