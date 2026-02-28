@@ -33,6 +33,7 @@ namespace Minesweeper3D.Unity
         private HUDController _hudController;
         private HighlightController _highlightController;
         private TimerController _timer;
+        private FeedbackManager _feedback;
         private bool _firstClick = true;
 
         public TimerController Timer => _timer;
@@ -100,6 +101,11 @@ namespace Minesweeper3D.Unity
             _hudController = hudObj.AddComponent<HUDController>();
             _hudController.Init(this, _sliceController, _inputManager);
 
+            // Feedback manager (sound + haptics)
+            var feedbackObj = new GameObject("FeedbackManager");
+            _feedback = feedbackObj.AddComponent<FeedbackManager>();
+            _feedback.Init();
+
             // Highlight controller
             var highlightObj = new GameObject("HighlightController");
             _highlightController = highlightObj.AddComponent<HighlightController>();
@@ -141,13 +147,28 @@ namespace Minesweeper3D.Unity
                 mineCount = Board.MineCount; // sync in case generator boosted mines
                 Board.Reveal(coord);
                 _timer.StartTimer();
+                _feedback?.PlayTap();
+                int cascadeCount = Board.LastRevealed.Count;
+                if (cascadeCount > 1) _feedback?.PlayRevealCascade(cascadeCount);
                 RefreshWithCascade();
+                PlayEndFeedback();
                 return;
             }
 
             var rv = Board.Reveal(coord);
             if (rv == RevealResult.Ok || rv == RevealResult.Mine)
+            {
+                _feedback?.PlayTap();
+                if (rv == RevealResult.Ok && Board.LastRevealed.Count > 1)
+                    _feedback?.PlayRevealCascade(Board.LastRevealed.Count);
+                if (rv == RevealResult.Mine)
+                {
+                    _feedback?.PlayMineReveal();
+                    _feedback?.VibrateHeavy();
+                }
                 RefreshWithCascade();
+                PlayEndFeedback();
+            }
         }
 
         private void HandleFlag(Coord3 coord)
@@ -156,7 +177,16 @@ namespace Minesweeper3D.Unity
                 return;
 
             if (Board.ToggleFlag(coord))
+            {
+                bool isFlagged = Board.GetState(coord) == CellState.Flagged;
+                if (isFlagged)
+                    _feedback?.PlayFlag();
+                else
+                    _feedback?.PlayUnflag();
+                _feedback?.VibrateLight();
                 RefreshUI();
+                PlayEndFeedback();
+            }
         }
 
         private void HandleSliceChange(int direction)
@@ -288,6 +318,20 @@ namespace Minesweeper3D.Unity
             _highlightController?.Rebind(_sliceController);
             _highlightController?.ClearCache();
             RefreshUI();
+        }
+
+        private void PlayEndFeedback()
+        {
+            if (Board == null) return;
+            if (Board.Status == GameStatus.Won)
+            {
+                _feedback?.PlayWin();
+                _feedback?.VibratePattern();
+            }
+            else if (Board.Status == GameStatus.Lost)
+            {
+                _feedback?.PlayLose();
+            }
         }
 
         private void RefreshWithCascade()

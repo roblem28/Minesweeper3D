@@ -272,6 +272,9 @@ namespace Minesweeper3D.Unity
             RefreshDifficultyHighlight();
         }
 
+        private CanvasGroup _endPanelCanvasGroup;
+        private Coroutine _endPanelAnim;
+
         private void BuildEndPanel()
         {
             _endPanel = new GameObject("EndPanel");
@@ -284,31 +287,41 @@ namespace Minesweeper3D.Unity
             rt.anchoredPosition = Vector2.zero;
 
             var bg = _endPanel.AddComponent<Image>();
-            bg.color = new Color(0.08f, 0.08f, 0.12f, 0.92f);
+            bg.color = new Color(0.06f, 0.06f, 0.10f, 0.95f);
+            bg.sprite = GetRoundedButtonSprite();
+            bg.type = Image.Type.Sliced;
+
+            // Add outline for panel border
+            var outline = _endPanel.AddComponent<Outline>();
+            outline.effectColor = new Color(1f, 1f, 1f, 0.1f);
+            outline.effectDistance = new Vector2(2f, 2f);
+
+            _endPanelCanvasGroup = _endPanel.AddComponent<CanvasGroup>();
 
             var layout = _endPanel.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(30, 30, 30, 30);
-            layout.spacing = 12f;
+            layout.spacing = 14f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = true;
             layout.childControlHeight = false;
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            _endTitle      = MakeLabel(_endPanel.transform, "EndTitle", "", 48, 40f);
+            _endTitle      = MakeLabel(_endPanel.transform, "EndTitle", "", 52, 50f);
             _endTime       = MakeLabel(_endPanel.transform, "EndTime", "", 30, 36f);
             _endHints      = MakeLabel(_endPanel.transform, "EndHints", "", 30, 36f);
-            _endScore      = MakeLabel(_endPanel.transform, "EndScore", "", 34, 36f);
+            _endScore      = MakeLabel(_endPanel.transform, "EndScore", "", 36, 40f);
             _endDifficulty = MakeLabel(_endPanel.transform, "EndDifficulty", "", 26, 36f);
-            _endDifficulty.color = new Color(0.7f, 0.7f, 0.7f);
+            _endDifficulty.color = new Color(0.6f, 0.6f, 0.7f);
 
-            MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(336f, 78f), 29, () =>
+            var newGameBtn = MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(336f, 78f), 30, () =>
             {
                 _endPanel.SetActive(false);
                 _input?.SetEnabled(true);
                 _game.RestartGame();
                 RefreshDifficultyHighlight();
             });
+            EnsureButtonBorder(newGameBtn);
 
             _endPanel.SetActive(false);
         }
@@ -325,12 +338,12 @@ namespace Minesweeper3D.Unity
             rt.anchoredPosition = new Vector2(-5f, 0f);
 
             var bg = panel.AddComponent<Image>();
-            bg.color = new Color(0.1f, 0.1f, 0.18f, 0.4f);
+            bg.color = new Color(0.102f, 0.102f, 0.227f, 0.5f); // match sidebar
             bg.raycastTarget = false;
 
             var layout = panel.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset(5, 5, 5, 5);
-            layout.spacing = 4f;
+            layout.spacing = 6f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
@@ -338,20 +351,22 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandHeight = false;
 
             // UP arrow
-            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(108f, 108f), 29, () =>
+            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(108f, 108f), 34, () =>
             {
                 _game.HandleSliceChangePublic(1);
             });
+            EnsureButtonBorder(_sliceUpBtn);
 
             // Slice label
             _sliceNavText = MakeLabel(panel.transform, "SliceNavText", "1/4", 30, 60f);
             _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(90f, 60f);
 
             // DOWN arrow
-            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(108f, 108f), 29, () =>
+            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(108f, 108f), 34, () =>
             {
                 _game.HandleSliceChangePublic(-1);
             });
+            EnsureButtonBorder(_sliceDownBtn);
         }
 
         private void BuildSliceFlash()
@@ -660,14 +675,15 @@ namespace Minesweeper3D.Unity
             if (isWin)
             {
                 _endTitle.text = "YOU WIN!";
-                _endTitle.color = new Color(0.2f, 0.9f, 0.2f);
+                _endTitle.color = new Color(0f, 1f, 0.533f); // #00FF88
                 _endScore.gameObject.SetActive(true);
                 _endScore.text = $"Score: {ScoreController.Calculate(_game.GridSize, _game.Timer.ElapsedSeconds, _game.HintsUsed)}";
+                _endScore.color = new Color(1f, 0.95f, 0.4f); // gold
             }
             else
             {
                 _endTitle.text = "GAME OVER";
-                _endTitle.color = new Color(0.9f, 0.2f, 0.2f);
+                _endTitle.color = new Color(0.95f, 0.25f, 0.25f);
                 _endScore.gameObject.SetActive(false);
             }
 
@@ -676,6 +692,37 @@ namespace Minesweeper3D.Unity
             _endDifficulty.text = _game.IsCustomGame
                 ? $"Difficulty: Custom ({_game.GridSize}^3, {_game.MineCount} mines)"
                 : $"Difficulty: {_game.CurrentDifficulty}";
+
+            // Slide-in animation
+            if (_endPanelAnim != null) StopCoroutine(_endPanelAnim);
+            _endPanelAnim = StartCoroutine(EndPanelSlideIn());
+        }
+
+        private IEnumerator EndPanelSlideIn()
+        {
+            var rt = _endPanel.GetComponent<RectTransform>();
+            float duration = 0.35f;
+            float elapsed = 0f;
+            float startY = -80f;
+
+            _endPanelCanvasGroup.alpha = 0f;
+            rt.anchoredPosition = new Vector2(0f, startY);
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                // Ease-out back (slight overshoot for bounce feel)
+                float eased = 1f - Mathf.Pow(1f - t, 3f);
+
+                _endPanelCanvasGroup.alpha = Mathf.Lerp(0f, 1f, Mathf.Clamp01(t * 2f)); // fade in faster
+                rt.anchoredPosition = new Vector2(0f, Mathf.Lerp(startY, 0f, eased));
+                yield return null;
+            }
+
+            _endPanelCanvasGroup.alpha = 1f;
+            rt.anchoredPosition = Vector2.zero;
+            _endPanelAnim = null;
         }
 
         // ========== DIFFICULTY HIGHLIGHT ==========

@@ -61,18 +61,18 @@ namespace Minesweeper3D.Unity
         private static readonly Color GhostFlagged = new Color(0.80f, 0.20f, 0.20f, 0.15f);
         private static readonly Color GhostMine    = new Color(0.67f, 0.67f, 0.27f, 0.12f);
 
-        // --- Count label colors (8-tier classic Minesweeper) ---
+        // --- Count label colors (8-tier, high contrast on #D4D4D4 revealed bg) ---
         private static readonly Color[] CountColors =
         {
             Color.clear,                                    // 0 (never shown)
-            new Color(0.106f, 0.184f, 0.898f),              // 1 blue
-            new Color(0.110f, 0.549f, 0.110f),              // 2 green
-            new Color(0.898f, 0.125f, 0.125f),              // 3 red
-            new Color(0.071f, 0.071f, 0.478f),              // 4 dark blue
-            new Color(0.502f, 0.000f, 0.125f),              // 5 maroon
-            new Color(0.000f, 0.502f, 0.502f),              // 6 teal
-            new Color(0.05f,  0.05f,  0.05f),               // 7 black
-            new Color(0.50f,  0.50f,  0.50f),               // 8 gray
+            new Color(0.05f, 0.10f, 0.75f),                 // 1 deep blue
+            new Color(0.05f, 0.45f, 0.05f),                 // 2 forest green
+            new Color(0.78f, 0.05f, 0.05f),                 // 3 strong red
+            new Color(0.03f, 0.03f, 0.40f),                 // 4 navy
+            new Color(0.45f, 0.00f, 0.10f),                 // 5 dark maroon
+            new Color(0.00f, 0.40f, 0.40f),                 // 6 dark teal
+            new Color(0.02f, 0.02f, 0.02f),                 // 7 near-black
+            new Color(0.35f, 0.35f, 0.35f),                 // 8 dark gray
         };
 
         public Coord3 Coord => new Coord3(_x, _y, _z);
@@ -111,7 +111,7 @@ namespace Minesweeper3D.Unity
             _labelShadow.fontSize = 58;
             _labelShadow.fontStyle = FontStyle.Bold;
             _labelShadow.text = "";
-            _labelShadow.color = new Color(0f, 0f, 0f, 0.35f);
+            _labelShadow.color = new Color(0f, 0f, 0f, 0.45f);
 
             // Label child — positioned just above top face
             var labelObj = new GameObject("Label");
