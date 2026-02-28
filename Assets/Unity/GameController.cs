@@ -134,6 +134,7 @@ namespace Minesweeper3D.Unity
             {
                 _firstClick = false;
                 Board = Generator.Generate(gridSize, mineCount, coord, seed);
+                mineCount = Board.MineCount; // sync in case generator boosted mines
                 Board.Reveal(coord);
                 _timer.StartTimer();
                 RefreshUI();

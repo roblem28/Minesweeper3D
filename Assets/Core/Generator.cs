@@ -14,23 +14,40 @@ namespace Minesweeper3D.Core
         /// guaranteeing first-click cell and its 6 face-neighbors are safe.
         /// </summary>
         private const int MaxRegenerationAttempts = 50;
-        private const float MaxFirstClickRevealRatio = 0.60f;
+        private const float MaxFirstClickRevealRatio = 0.40f;
+        private const int MaxMineBoosts = 10;
 
         public static Board Generate(int size, int mineCount, Coord3 firstClick, int seed)
         {
-            for (int attempt = 0; attempt < MaxRegenerationAttempts; attempt++)
-            {
-                var board = GenerateBoard(size, mineCount, firstClick, seed + attempt);
+            int total = size * size * size;
+            // Exclusion set is firstClick + up to 6 neighbors = 7 cells
+            int maxMines = total - 7;
+            int currentMines = mineCount;
 
-                // Simulate first click to check if it reveals too many cells
-                int totalSafe = size * size * size - mineCount;
-                int revealed = SimulateReveal(board, firstClick);
-                if (revealed <= (int)(totalSafe * MaxFirstClickRevealRatio))
-                    return board;
+            for (int boost = 0; boost <= MaxMineBoosts; boost++)
+            {
+                for (int attempt = 0; attempt < MaxRegenerationAttempts; attempt++)
+                {
+                    var board = GenerateBoard(size, currentMines, firstClick, seed + attempt);
+
+                    int totalSafe = total - currentMines;
+                    int revealed = SimulateReveal(board, firstClick);
+                    if (revealed <= (int)(totalSafe * MaxFirstClickRevealRatio))
+                        return board;
+                }
+
+                // All attempts exceeded threshold — add more mines and retry
+                if (currentMines + 1 <= maxMines)
+                {
+                    currentMines++;
+                    seed += MaxRegenerationAttempts; // fresh seed range
+                }
+                else
+                    break;
             }
 
-            // Accept the last attempt if all exceeded the threshold
-            return GenerateBoard(size, mineCount, firstClick, seed + MaxRegenerationAttempts - 1);
+            // Should be extremely rare — return last generated board
+            return GenerateBoard(size, currentMines, firstClick, seed);
         }
 
         private static Board GenerateBoard(int size, int mineCount, Coord3 firstClick, int seed)

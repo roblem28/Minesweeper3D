@@ -90,20 +90,20 @@ namespace Minesweeper3D.CoreTests
             var click = new Coord3(2, 2, 2);
             int size = 4;
             int mines = 12;
-            int totalSafe = size * size * size - mines; // 52
 
             for (int seed = 0; seed < 50; seed++)
             {
                 var board = Generator.Generate(size, mines, click, seed);
-                Assert.AreEqual(mines, board.TotalMines(),
-                    $"Mine count mismatch (seed={seed})");
+                Assert.GreaterOrEqual(board.TotalMines(), mines,
+                    $"Mine count should be >= requested (seed={seed})");
 
                 // Simulate first click
                 var simBoard = Generator.Generate(size, mines, click, seed);
                 simBoard.Reveal(click);
                 int revealed = simBoard.RevealedSafeCount;
+                int totalSafe = size * size * size - simBoard.TotalMines();
 
-                Assert.LessOrEqual(revealed, (int)(totalSafe * 0.60f),
+                Assert.LessOrEqual(revealed, (int)(totalSafe * 0.40f),
                     $"First click revealed {revealed}/{totalSafe} safe cells — too many (seed={seed})");
             }
         }
