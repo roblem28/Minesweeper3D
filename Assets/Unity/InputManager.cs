@@ -32,6 +32,10 @@ namespace Minesweeper3D.Unity
         public event Action<Coord3> OnDoubleClick;      // desktop
         public event Action<Coord3> OnDoubleTap;        // mobile
 
+        // --- Press events (for visual feedback) ---
+        public event Action<Coord3> OnPressDown;
+        public event Action OnPressUp;
+
         // --- Config ---
         private Camera _cam;
         private bool _enabled = true;
@@ -125,6 +129,17 @@ namespace Minesweeper3D.Unity
 
             bool left = mouse.leftButton.wasPressedThisFrame;
             bool right = mouse.rightButton.wasPressedThisFrame;
+            bool leftUp = mouse.leftButton.wasReleasedThisFrame;
+
+            // --- Press feedback ---
+            if (left && !IsPointerOverUI())
+            {
+                Vector2 pressPos = mouse.position.ReadValue();
+                if (TryRaycastCell(pressPos, out Coord3 pressCoord))
+                    OnPressDown?.Invoke(pressCoord);
+            }
+            if (leftUp)
+                OnPressUp?.Invoke();
 
             // --- Hover detection (every frame, no button pressed) ---
             if (!mouse.leftButton.isPressed && !mouse.rightButton.isPressed && !mouse.middleButton.isPressed)

@@ -29,6 +29,14 @@ namespace Minesweeper3D.Unity
         private bool _minePopped;
         private Coroutine _minePopCoroutine;
 
+        // Hover/press state
+        private bool _isHovered;
+        private bool _isPressed;
+        private float _currentScale;
+        private float _targetScale;
+        private Color _baseColor;
+        private Coroutine _revealFadeCoroutine;
+
         // Shared meshes (created once)
         private static Mesh _cubeMesh;
         private static Mesh _wireframeMesh;
@@ -194,8 +202,10 @@ namespace Minesweeper3D.Unity
             // Game over: expose unflagged mines
             if (gameOver && isMine && state != CellState.Flagged)
             {
+                _baseColor = ActiveMineRevealed;
                 ApplyColor(ActiveMineRevealed);
                 SetScale(CubeScale);
+                _targetScale = CubeScale;
                 SetLabelText("\u25CF"); // ● solid circle
                 _label.color = new Color(0.08f, 0.08f, 0.08f);
                 PlayMinePopIfNeeded();
@@ -206,18 +216,25 @@ namespace Minesweeper3D.Unity
             switch (state)
             {
                 case CellState.Hidden:
-                    ApplyColor(ActiveHidden);
+                    _baseColor = ActiveHidden;
+                    ApplyColor(_isHovered ? _baseColor * 1.2f : _baseColor);
                     SetScale(CubeScale);
+                    _targetScale = _isHovered ? CubeScale * 1.02f : CubeScale;
                     break;
 
                 case CellState.Flagged:
+                    _baseColor = ActiveFlagged;
                     ApplyColor(ActiveFlagged);
                     SetScale(CubeScale);
+                    _targetScale = CubeScale;
                     SetLabelText("F");
                     _label.color = Color.white;
                     break;
 
                 case CellState.Revealed:
+                    // Skip if staggered animation is playing
+                    if (_revealFadeCoroutine != null) break;
+
                     if (count == 0 && !isMine)
                     {
                         _renderer.enabled = false;
@@ -226,18 +243,13 @@ namespace Minesweeper3D.Unity
                     }
                     else
                     {
+                        _baseColor = ActiveRevealed;
                         ApplyColor(ActiveRevealed);
                         SetScale(RevealedScale);
+                        _targetScale = RevealedScale;
                         SetLabelText(count.ToString());
                         int ci = Mathf.Min(count, CountColors.Length - 1);
                         _label.color = CountColors[ci];
-
-                        // Trigger pop on fresh reveal
-                        if (_prevState != CellState.Revealed)
-                        {
-                            if (_revealPopCoroutine != null) StopCoroutine(_revealPopCoroutine);
-                            _revealPopCoroutine = StartCoroutine(RevealPopRoutine());
-                        }
                     }
                     break;
             }
@@ -333,6 +345,167 @@ namespace Minesweeper3D.Unity
             }
             SetScale(CubeScale);
             _minePopCoroutine = null;
+        }
+
+        // ----- Hover / Press feedback -----
+
+        public void SetHovered(bool hovered)
+        {
+            _isHovered = hovered;
+            UpdateInteractionScale();
+            UpdateInteractionColor();
+        }
+
+        public void SetPressed(bool pressed)
+        {
+            _isPressed = pressed;
+            UpdateInteractionScale();
+        }
+
+        private void UpdateInteractionScale()
+        {
+            if (!_isActive) return;
+            float baseScale = (_prevState == CellState.Revealed) ? RevealedScale : CubeScale;
+            if (_isPressed)
+                _targetScale = baseScale * 0.95f;
+            else if (_isHovered)
+                _targetScale = baseScale * 1.02f;
+            else
+                _targetScale = baseScale;
+        }
+
+        private void UpdateInteractionColor()
+        {
+            if (!_isActive || _prevState == CellState.Revealed) return;
+            if (_isHovered)
+            {
+                // Brighten by ~20%
+                Color bright = _baseColor * 1.2f;
+                bright.a = 1f;
+                ApplyColor(bright);
+            }
+            else
+            {
+                ApplyColor(_baseColor);
+            }
+        }
+
+        private void Update()
+        {
+            if (!_isActive) return;
+            // Smooth scale interpolation (0.1s ease)
+            float current = transform.localScale.x;
+            if (Mathf.Abs(current - _targetScale) > 0.001f)
+            {
+                float speed = 1f / 0.1f; // 0.1s ease
+                float next = Mathf.MoveTowards(current, _targetScale, speed * Time.deltaTime * Mathf.Abs(_targetScale - current) + speed * Time.deltaTime * 0.1f);
+                // Exponential ease for smoother feel
+                next = Mathf.Lerp(current, _targetScale, 1f - Mathf.Exp(-15f * Time.deltaTime));
+                transform.localScale = Vector3.one * next;
+            }
+        }
+
+        // ----- Staggered reveal animation -----
+
+        /// <summary>Animate this cell's reveal with a delay for cascade effect.</summary>
+        public void PlayRevealAnimation(float delay, int count)
+        {
+            if (_revealFadeCoroutine != null) StopCoroutine(_revealFadeCoroutine);
+            _revealFadeCoroutine = StartCoroutine(RevealFadeRoutine(delay, count));
+        }
+
+        private IEnumerator RevealFadeRoutine(float delay, int count)
+        {
+            // Hide initially during delay
+            if (count == 0)
+            {
+                _renderer.enabled = false;
+                _label.gameObject.SetActive(false);
+                _labelShadow.gameObject.SetActive(false);
+            }
+            else
+            {
+                // For numbered cells: start with hidden appearance, then animate
+                ApplyColor(ActiveHidden);
+                SetScale(CubeScale);
+                _label.gameObject.SetActive(false);
+                _labelShadow.gameObject.SetActive(false);
+            }
+
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+
+            if (count == 0)
+            {
+                // Fade out: briefly show then disappear
+                _renderer.enabled = true;
+                float duration = 0.15f;
+                float elapsed = 0f;
+                Color startColor = ActiveHidden;
+                while (elapsed < duration)
+                {
+                    elapsed += Time.deltaTime;
+                    float t = elapsed / duration;
+                    float alpha = 1f - t;
+                    Color c = startColor;
+                    c.a = alpha;
+                    ApplyColor(c);
+                    float s = Mathf.Lerp(CubeScale, CubeScale * 0.8f, t);
+                    transform.localScale = Vector3.one * s;
+                    yield return null;
+                }
+                _renderer.enabled = false;
+                _label.gameObject.SetActive(false);
+                _labelShadow.gameObject.SetActive(false);
+            }
+            else
+            {
+                // Numbered cell: fade color transition + number scale-in
+                float colorDuration = 0.15f;
+                float elapsed = 0f;
+                while (elapsed < colorDuration)
+                {
+                    elapsed += Time.deltaTime;
+                    float t = elapsed / colorDuration;
+                    Color c = Color.Lerp(ActiveHidden, ActiveRevealed, t);
+                    ApplyColor(c);
+                    float s = Mathf.Lerp(CubeScale, RevealedScale, t);
+                    transform.localScale = Vector3.one * s;
+                    yield return null;
+                }
+                ApplyColor(ActiveRevealed);
+                SetScale(RevealedScale);
+                _targetScale = RevealedScale;
+
+                // Number fade-in with scale 0.8 → 1.0
+                _label.gameObject.SetActive(true);
+                _labelShadow.gameObject.SetActive(true);
+                SetLabelText(count.ToString());
+                int ci = Mathf.Min(count, CountColors.Length - 1);
+                Color numColor = CountColors[ci];
+
+                float numDuration = 0.2f;
+                elapsed = 0f;
+                Vector3 labelBase = _label.transform.localPosition;
+                Vector3 shadowBase = _labelShadow.transform.localPosition;
+                while (elapsed < numDuration)
+                {
+                    elapsed += Time.deltaTime;
+                    float t = elapsed / numDuration;
+                    float eased = 1f - (1f - t) * (1f - t); // ease-out
+                    _label.color = new Color(numColor.r, numColor.g, numColor.b, eased);
+                    _labelShadow.color = new Color(0f, 0f, 0f, 0.35f * eased);
+                    float labelScale = Mathf.Lerp(0.8f, 1f, eased);
+                    _label.characterSize = 0.315f * labelScale;
+                    _labelShadow.characterSize = 0.315f * labelScale;
+                    yield return null;
+                }
+                _label.color = numColor;
+                _labelShadow.color = new Color(0f, 0f, 0f, 0.35f);
+                _label.characterSize = 0.315f;
+                _labelShadow.characterSize = 0.315f;
+            }
+
+            _revealFadeCoroutine = null;
         }
 
         // ----- Transition support -----

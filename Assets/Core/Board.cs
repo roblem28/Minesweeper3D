@@ -22,6 +22,10 @@ namespace Minesweeper3D.Core
         private int _flagCount;
         private int _correctFlagCount;
 
+        /// <summary>Cells revealed during the most recent Reveal() call, in flood-fill order.</summary>
+        private readonly List<Coord3> _lastRevealed = new List<Coord3>();
+        public IReadOnlyList<Coord3> LastRevealed => _lastRevealed;
+
         // The 6 face-adjacent directions (±1 on exactly one axis)
         private static readonly int[,] Faces6Dirs =
         {
@@ -85,6 +89,7 @@ namespace Minesweeper3D.Core
         /// </summary>
         public RevealResult Reveal(Coord3 c)
         {
+            _lastRevealed.Clear();
             if (!InBounds(c)) return RevealResult.OutOfBounds;
             if (Status != GameStatus.Playing) return RevealResult.AlreadyRevealed;
 
@@ -264,6 +269,7 @@ namespace Minesweeper3D.Core
 
                 _states[idx] = CellState.Revealed;
                 _revealedSafeCount++;
+                _lastRevealed.Add(c);
 
                 // Only expand if this cell's count is 0
                 if (_counts[idx] == 0)

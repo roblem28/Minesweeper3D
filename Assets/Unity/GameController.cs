@@ -111,6 +111,10 @@ namespace Minesweeper3D.Unity
             _inputManager.OnHighlightStart += HandleHighlightStart;
             _inputManager.OnHighlightEnd += HandleHighlightEnd;
 
+            // Press feedback
+            _inputManager.OnPressDown += HandlePressDown;
+            _inputManager.OnPressUp += HandlePressUp;
+
             // Chord events (desktop double-click + mobile double-tap)
             _inputManager.OnDoubleClick += HandleChord;
             _inputManager.OnDoubleTap += HandleChord;
@@ -137,13 +141,13 @@ namespace Minesweeper3D.Unity
                 mineCount = Board.MineCount; // sync in case generator boosted mines
                 Board.Reveal(coord);
                 _timer.StartTimer();
-                RefreshUI();
+                RefreshWithCascade();
                 return;
             }
 
             var rv = Board.Reveal(coord);
             if (rv == RevealResult.Ok || rv == RevealResult.Mine)
-                RefreshUI();
+                RefreshWithCascade();
         }
 
         private void HandleFlag(Coord3 coord)
@@ -167,16 +171,22 @@ namespace Minesweeper3D.Unity
             _hudController?.FlashSliceIndicator();
         }
 
-        // --- Highlight handlers ---
+        // --- Hover/press cell feedback ---
+
+        private CellView _hoveredCell;
 
         private void HandleHoverEnter(Coord3 coord)
         {
             _highlightController?.BeginHighlight(coord);
+            if (_hoveredCell != null) _hoveredCell.SetHovered(false);
+            _hoveredCell = _sliceController.GetCell(coord);
+            _hoveredCell.SetHovered(true);
         }
 
         private void HandleHoverExit()
         {
             _highlightController?.EndHighlight();
+            if (_hoveredCell != null) { _hoveredCell.SetHovered(false); _hoveredCell = null; }
         }
 
         private void HandleHighlightStart(Coord3 coord)
@@ -187,6 +197,22 @@ namespace Minesweeper3D.Unity
         private void HandleHighlightEnd()
         {
             _highlightController?.EndHighlight();
+        }
+
+        // --- Press feedback ---
+
+        private CellView _pressedCell;
+
+        private void HandlePressDown(Coord3 coord)
+        {
+            if (_pressedCell != null) _pressedCell.SetPressed(false);
+            _pressedCell = _sliceController.GetCell(coord);
+            _pressedCell.SetPressed(true);
+        }
+
+        private void HandlePressUp()
+        {
+            if (_pressedCell != null) { _pressedCell.SetPressed(false); _pressedCell = null; }
         }
 
         // --- Chord handler ---
@@ -264,6 +290,38 @@ namespace Minesweeper3D.Unity
             RefreshUI();
         }
 
+        private void RefreshWithCascade()
+        {
+            if (Board != null && Board.Status != GameStatus.Playing)
+                _timer.StopTimer();
+
+            var lastRevealed = Board?.LastRevealed;
+            if (lastRevealed != null && lastRevealed.Count > 1)
+            {
+                // Refresh non-revealed cells immediately
+                _sliceController.RefreshAll();
+
+                // Stagger cascade: 25ms per cell, capped at 500ms total
+                float perCell = 0.025f;
+                float maxDelay = 0.5f;
+                for (int i = 0; i < lastRevealed.Count; i++)
+                {
+                    var coord = lastRevealed[i];
+                    var cell = _sliceController.GetCell(coord);
+                    float delay = Mathf.Min(i * perCell, maxDelay);
+                    int count = Board.GetCount(coord);
+                    cell.PlayRevealAnimation(delay, count);
+                }
+            }
+            else
+            {
+                _sliceController.RefreshAll();
+            }
+
+            _highlightController?.RefreshCrossSliceIndicators();
+            _hudController?.Refresh();
+        }
+
         private void RefreshUI()
         {
             if (Board != null && Board.Status != GameStatus.Playing)
@@ -329,6 +387,8 @@ namespace Minesweeper3D.Unity
                 _inputManager.OnHoverExit -= HandleHoverExit;
                 _inputManager.OnHighlightStart -= HandleHighlightStart;
                 _inputManager.OnHighlightEnd -= HandleHighlightEnd;
+                _inputManager.OnPressDown -= HandlePressDown;
+                _inputManager.OnPressUp -= HandlePressUp;
                 _inputManager.OnDoubleClick -= HandleChord;
                 _inputManager.OnDoubleTap -= HandleChord;
             }
