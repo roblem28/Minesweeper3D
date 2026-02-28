@@ -60,6 +60,10 @@ namespace Minesweeper3D.Unity
         private GameObject _sliceDownBtn;
         private Coroutine _pulseCoroutine;
 
+        // Depth indicator
+        private Image[] _depthPips;
+        private TextMeshProUGUI _depthLabel;
+
         // Mobile flag toggle
         private bool _flagMode;
         private Image _flagToggleBg;
@@ -130,6 +134,9 @@ namespace Minesweeper3D.Unity
 
             // === REMAINING INFO (below info bar) ===
             BuildRemainingInfo();
+
+            // === DEPTH INDICATOR (right edge) ===
+            BuildDepthIndicator();
 
             // === TUTORIAL OVERLAY (one-time) ===
             BuildTutorialOverlay();
@@ -474,6 +481,91 @@ namespace Minesweeper3D.Unity
             _remainingInfoObj.SetActive(false);
         }
 
+        private void BuildDepthIndicator()
+        {
+            int size = _game.GridSize;
+            _depthPips = new Image[size];
+
+            var panel = new GameObject("DepthIndicator");
+            panel.transform.SetParent(_safeAreaRoot, false);
+            var rt = panel.AddComponent<RectTransform>();
+            // Right edge, to the left of SliceNav
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.anchoredPosition = new Vector2(-130f, 0f);
+
+            var layout = panel.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset(4, 4, 4, 4);
+            layout.spacing = 6f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = false;
+            layout.childControlHeight = false;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            var fitter = panel.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            // Build pips top-to-bottom (highest slice at top)
+            for (int i = size - 1; i >= 0; i--)
+            {
+                var pipRow = new GameObject($"PipRow_{i}");
+                pipRow.transform.SetParent(panel.transform, false);
+                var rowRt = pipRow.AddComponent<RectTransform>();
+                rowRt.sizeDelta = new Vector2(40f, 14f);
+
+                var rowLayout = pipRow.AddComponent<HorizontalLayoutGroup>();
+                rowLayout.spacing = 4f;
+                rowLayout.childAlignment = TextAnchor.MiddleRight;
+                rowLayout.childControlWidth = false;
+                rowLayout.childControlHeight = false;
+                rowLayout.childForceExpandWidth = false;
+                rowLayout.childForceExpandHeight = false;
+
+                // Pip square
+                var pipGo = new GameObject($"Pip_{i}");
+                pipGo.transform.SetParent(pipRow.transform, false);
+                var pipRt = pipGo.AddComponent<RectTransform>();
+                pipRt.sizeDelta = new Vector2(10f, 10f);
+                var pipImg = pipGo.AddComponent<Image>();
+                pipImg.color = new Color(1f, 1f, 1f, 0.2f);
+                pipImg.raycastTarget = false;
+                _depthPips[i] = pipImg;
+            }
+
+            // Slice label — positioned to the right of pips
+            var labelGo = new GameObject("DepthLabel");
+            labelGo.transform.SetParent(panel.transform, false);
+            var labelRt = labelGo.AddComponent<RectTransform>();
+            labelRt.sizeDelta = new Vector2(30f, 20f);
+            _depthLabel = labelGo.AddComponent<TextMeshProUGUI>();
+            _depthLabel.fontSize = 16;
+            _depthLabel.color = new Color(0f, 1f, 0.533f, 0.9f); // #00FF88
+            _depthLabel.alignment = TextAlignmentOptions.Center;
+            _depthLabel.raycastTarget = false;
+
+            RefreshDepthIndicator();
+        }
+
+        private void RefreshDepthIndicator()
+        {
+            if (_depthPips == null || _slice == null) return;
+            int active = _slice.CurrentSlice;
+            Color pipActive = new Color(0f, 1f, 0.533f, 1f); // #00FF88
+            Color pipInactive = new Color(1f, 1f, 1f, 0.2f);
+
+            for (int i = 0; i < _depthPips.Length; i++)
+            {
+                bool isActive = (i == active);
+                _depthPips[i].color = isActive ? pipActive : pipInactive;
+                _depthPips[i].rectTransform.sizeDelta = isActive
+                    ? new Vector2(12f, 12f) : new Vector2(8f, 8f);
+            }
+            _depthLabel.text = $"{active + 1}";
+        }
+
         public void ShowRemainingInfo(int cellCount, int remaining)
         {
             if (_remainingInfoObj == null) return;
@@ -524,6 +616,7 @@ namespace Minesweeper3D.Unity
             _timerText.text = $"Time: {_game.Timer.FormattedTime}";
             if (_sliceNavText != null)
                 _sliceNavText.text = $"{_slice.CurrentSlice + 1}/{_slice.Size}";
+            RefreshDepthIndicator();
 
             Board board = _game.Board;
             if (board == null)

@@ -19,7 +19,10 @@ namespace Minesweeper3D.Unity
 
         public const float Spacing = 1.3f;
         private const float CubeScale = 0.6f;
-        private const float TransitionDuration = 0.15f;
+        private const float TransitionDuration = 0.20f;
+        private const float GhostAlphaResting = 0.25f;
+        private const float GhostAlphaPulse = 0.15f;
+        private const float PulseDuration = 0.15f;
 
         public int CurrentSlice => _currentSlice;
         public int Size => _size;
@@ -126,22 +129,23 @@ namespace Minesweeper3D.Unity
             float slideDir = (to > from) ? 1f : -1f;
             float offset = (_size - 1) * Spacing * 0.5f;
 
-            // Animate over TransitionDuration
+            // Phase 1: Main transition (0.2s) — fade active↔ghost + pulse inactive layers
             float elapsed = 0f;
             while (elapsed < TransitionDuration)
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / TransitionDuration);
+                float eased = 1f - (1f - t) * (1f - t); // ease-out quadratic
 
-                // Fade old slice from active to ghost
-                float oldAlpha = Mathf.Lerp(1f, 0.08f, t);
+                // Fade old slice from active to resting ghost
+                float oldAlpha = Mathf.Lerp(1f, GhostAlphaResting, eased);
                 for (int y = 0; y < _size; y++)
                     for (int x = 0; x < _size; x++)
                         _cells[x, y, from].SetTransitionAlpha(oldAlpha);
 
                 // Fade new slice from ghost to active + Y offset slide
-                float newAlpha = Mathf.Lerp(0.08f, 1f, t);
-                float yOffset = Mathf.Lerp(ySlideOffset * slideDir, 0f, t);
+                float newAlpha = Mathf.Lerp(GhostAlphaResting, 1f, eased);
+                float yOffset = Mathf.Lerp(ySlideOffset * slideDir, 0f, eased);
                 for (int y = 0; y < _size; y++)
                     for (int x = 0; x < _size; x++)
                     {
@@ -151,6 +155,19 @@ namespace Minesweeper3D.Unity
                         float baseY = y * Spacing - offset;
                         cell.transform.localPosition = new Vector3(pos.x, baseY + yOffset, pos.z);
                     }
+
+                // Pulse: briefly dim all other inactive layers to 0.15 then ease back
+                float pulseT = Mathf.Clamp01(elapsed / PulseDuration);
+                float pulseAlpha = pulseT < 0.5f
+                    ? Mathf.Lerp(GhostAlphaResting, GhostAlphaPulse, pulseT * 2f)
+                    : Mathf.Lerp(GhostAlphaPulse, GhostAlphaResting, (pulseT - 0.5f) * 2f);
+                for (int z = 0; z < _size; z++)
+                {
+                    if (z == from || z == to) continue;
+                    for (int y = 0; y < _size; y++)
+                        for (int x = 0; x < _size; x++)
+                            _cells[x, y, z].SetTransitionAlpha(pulseAlpha);
+                }
 
                 yield return null;
             }
