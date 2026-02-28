@@ -588,10 +588,12 @@ namespace Minesweeper3D.Unity
 
         // ========== DIFFICULTY HIGHLIGHT ==========
 
-        private static readonly Color ActiveColor = new Color(0.2f, 0.5f, 0.8f, 1f);        // bright blue for selected difficulty
-        private static readonly Color InactiveColor = new Color(0.1f, 0.23f, 0.42f, 1f);    // #1A3B6B dark blue
-        private static readonly Color FlagActiveColor = new Color(1f, 0.3f, 0.3f, 1f);       // bright red when flag mode active
-        private static readonly Color FlagInactiveColor = new Color(0.8f, 0.13f, 0.13f, 1f); // #CC2222 red normal
+        private static readonly Color ActiveColor = new Color(0.25f, 0.6f, 0.95f, 1f);       // bright blue for selected difficulty
+        private static readonly Color InactiveColor = new Color(0.12f, 0.12f, 0.22f, 1f);   // dark muted, distinct from black bg
+        private static readonly Color AccentGreen = new Color(0f, 1f, 0.533f, 1f);           // #00FF88 green accent
+        private static readonly Color FlagActiveColor = new Color(0.961f, 0.620f, 0.043f, 1f); // #F59E0B amber/orange
+        private static readonly Color FlagInactiveColor = new Color(0.25f, 0.18f, 0.12f, 1f);  // muted brown, clearly inactive
+        private static readonly Color ButtonBorderColor = new Color(1f, 1f, 1f, 0.15f);       // subtle white border
 
         private void RefreshDifficultyHighlight()
         {
@@ -603,44 +605,140 @@ namespace Minesweeper3D.Unity
                 var cb = btn.colors;
                 if (on)
                 {
-                    // Selected difficulty gets bright blue permanently
-                    cb.normalColor = ActiveColor;         // bright blue (0.2, 0.5, 0.8)
-                    cb.highlightedColor = new Color(0.25f, 0.55f, 0.85f, 1f);
-                    cb.pressedColor = new Color(0.15f, 0.4f, 0.7f, 1f);
+                    cb.normalColor = ActiveColor;
+                    cb.highlightedColor = new Color(0.30f, 0.65f, 1f, 1f);
+                    cb.pressedColor = new Color(0.18f, 0.45f, 0.75f, 1f);
                     cb.selectedColor = ActiveColor;
                 }
                 else
                 {
-                    // Inactive buttons use standard dark blue
-                    cb.normalColor = InactiveColor;       // dark blue (0.1, 0.23, 0.42)
-                    cb.highlightedColor = new Color(0.15f, 0.33f, 0.55f, 1f);
-                    cb.pressedColor = new Color(0.08f, 0.18f, 0.33f, 1f);
-                    cb.selectedColor = new Color(0.2f, 0.5f, 0.8f, 1f);
+                    cb.normalColor = InactiveColor;
+                    cb.highlightedColor = new Color(0.18f, 0.18f, 0.30f, 1f);
+                    cb.pressedColor = new Color(0.08f, 0.08f, 0.15f, 1f);
+                    cb.selectedColor = InactiveColor;
                 }
                 cb.colorMultiplier = 1f;
                 btn.colors = cb;
+
+                // Green left accent bar for active difficulty
+                EnsureAccentBar(btn.gameObject, on);
+                // Border outline for all buttons
+                EnsureButtonBorder(btn.gameObject);
+            }
+
+            // Also ensure borders on non-difficulty buttons
+            if (_hintBtn != null) EnsureButtonBorder(_hintBtn.gameObject);
+            if (_newGameBtn != null) EnsureButtonBorder(_newGameBtn.gameObject);
+            // Quit button
+            var quitBtn = _safeAreaRoot.Find("ButtonBar/Btn_Quit");
+            if (quitBtn != null) EnsureButtonBorder(quitBtn.gameObject);
+            if (_flagToggleBtn != null) EnsureButtonBorder(_flagToggleBtn.gameObject);
+        }
+
+        private void EnsureAccentBar(GameObject btnGo, bool active)
+        {
+            var existing = btnGo.transform.Find("AccentBar");
+            if (active)
+            {
+                if (existing == null)
+                {
+                    var bar = new GameObject("AccentBar");
+                    bar.transform.SetParent(btnGo.transform, false);
+                    var rt = bar.AddComponent<RectTransform>();
+                    rt.anchorMin = new Vector2(0f, 0f);
+                    rt.anchorMax = new Vector2(0f, 1f);
+                    rt.pivot = new Vector2(0f, 0.5f);
+                    rt.sizeDelta = new Vector2(6f, 0f);
+                    rt.anchoredPosition = new Vector2(2f, 0f);
+                    var img = bar.AddComponent<Image>();
+                    img.color = AccentGreen;
+                    img.raycastTarget = false;
+                }
+                else
+                {
+                    existing.gameObject.SetActive(true);
+                }
+            }
+            else if (existing != null)
+            {
+                existing.gameObject.SetActive(false);
             }
         }
+
+        private void EnsureButtonBorder(GameObject btnGo)
+        {
+            if (btnGo.GetComponent<Outline>() != null) return;
+            var outline = btnGo.AddComponent<Outline>();
+            outline.effectColor = ButtonBorderColor;
+            outline.effectDistance = new Vector2(1.5f, 1.5f);
+        }
+
+        private Coroutine _flagPulseCoroutine;
 
         private void ApplyFlagButtonColors(Button btn, bool active)
         {
             var cb = btn.colors;
             if (active)
             {
-                cb.normalColor = FlagActiveColor;                        // bright red (1, 0.3, 0.3)
-                cb.highlightedColor = new Color(1f, 0.4f, 0.4f, 1f);
-                cb.pressedColor = new Color(0.8f, 0.2f, 0.2f, 1f);
+                cb.normalColor = FlagActiveColor;                                // amber #F59E0B
+                cb.highlightedColor = new Color(1f, 0.70f, 0.10f, 1f);
+                cb.pressedColor = new Color(0.80f, 0.52f, 0.03f, 1f);
                 cb.selectedColor = FlagActiveColor;
+
+                // Dark text for contrast on bright amber
+                var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
+                if (txt != null) txt.color = new Color(0.1f, 0.06f, 0f, 1f);
             }
             else
             {
-                cb.normalColor = FlagInactiveColor;                      // red (0.8, 0.13, 0.13)
-                cb.highlightedColor = new Color(0.9f, 0.2f, 0.2f, 1f);
-                cb.pressedColor = new Color(0.6f, 0.1f, 0.1f, 1f);
-                cb.selectedColor = new Color(1f, 0.3f, 0.3f, 1f);
+                cb.normalColor = FlagInactiveColor;                              // muted brown
+                cb.highlightedColor = new Color(0.32f, 0.24f, 0.16f, 1f);
+                cb.pressedColor = new Color(0.18f, 0.12f, 0.08f, 1f);
+                cb.selectedColor = FlagInactiveColor;
+
+                var txt = btn.GetComponentInChildren<TextMeshProUGUI>();
+                if (txt != null) txt.color = new Color(0.6f, 0.5f, 0.4f, 1f);
             }
             cb.colorMultiplier = 1f;
             btn.colors = cb;
+
+            // Pulsing glow when active, reset to border when inactive
+            if (_flagPulseCoroutine != null) StopCoroutine(_flagPulseCoroutine);
+            if (active)
+            {
+                _flagPulseCoroutine = StartCoroutine(FlagPulseRoutine(btn));
+            }
+            else
+            {
+                _flagPulseCoroutine = null;
+                var outline = btn.gameObject.GetComponent<Outline>();
+                if (outline != null)
+                {
+                    outline.effectColor = ButtonBorderColor;
+                    outline.effectDistance = new Vector2(1.5f, 1.5f);
+                }
+            }
+        }
+
+        private IEnumerator FlagPulseRoutine(Button btn)
+        {
+            var outline = btn.gameObject.GetComponent<Outline>();
+            if (outline == null)
+            {
+                outline = btn.gameObject.AddComponent<Outline>();
+                outline.effectDistance = new Vector2(2f, 2f);
+            }
+
+            Color glowColor = new Color(0.961f, 0.620f, 0.043f, 0.7f);
+            Color dimColor = new Color(0.961f, 0.620f, 0.043f, 0.2f);
+
+            while (true)
+            {
+                float t = (Mathf.Sin(Time.time * 4f) + 1f) * 0.5f; // 0..1 oscillation
+                outline.effectColor = Color.Lerp(dimColor, glowColor, t);
+                outline.effectDistance = Vector2.one * Mathf.Lerp(2f, 4f, t);
+                yield return null;
+            }
         }
 
         // ========== HINT ==========
@@ -762,10 +860,10 @@ namespace Minesweeper3D.Unity
             btn.navigation = new Navigation { mode = Navigation.Mode.None };
 
             var cb = btn.colors;
-            cb.normalColor = new Color(0.1f, 0.23f, 0.42f, 1f);      // dark blue #1A3B6B
-            cb.highlightedColor = new Color(0.15f, 0.33f, 0.55f, 1f); // lighter blue on hover
-            cb.pressedColor = new Color(0.08f, 0.18f, 0.33f, 1f);     // darker blue on press
-            cb.selectedColor = new Color(0.2f, 0.5f, 0.8f, 1f);       // bright blue when active
+            cb.normalColor = InactiveColor;
+            cb.highlightedColor = new Color(0.18f, 0.18f, 0.30f, 1f);
+            cb.pressedColor = new Color(0.08f, 0.08f, 0.15f, 1f);
+            cb.selectedColor = InactiveColor;
             cb.colorMultiplier = 1f;
             cb.fadeDuration = 0.08f;
             btn.colors = cb;
