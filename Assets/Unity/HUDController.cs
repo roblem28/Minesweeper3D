@@ -242,7 +242,17 @@ namespace Minesweeper3D.Unity
             });
             _newGameBtn = ngGo.GetComponent<Button>();
 
-            // Quit button
+            // Mobile flag toggle
+            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(228f, 91f), 36, () =>
+            {
+                _flagMode = !_flagMode;
+                ApplyFlagButtonColors(_flagToggleBtn, _flagMode);
+            });
+            _flagToggleBg = flagGo.GetComponent<Image>();
+            _flagToggleBtn = flagGo.GetComponent<Button>();
+            ApplyFlagButtonColors(_flagToggleBtn, false);
+
+            // Quit button (bottom)
             MakeButton(panel.transform, "Btn_Quit", "Quit", new Vector2(228f, 91f), 36, () =>
             {
 #if UNITY_EDITOR
@@ -251,17 +261,6 @@ namespace Minesweeper3D.Unity
                 Application.Quit();
 #endif
             });
-
-            // Mobile flag toggle — red button
-            var flagGo = MakeButton(panel.transform, "Btn_FlagToggle", "Flag Mode", new Vector2(228f, 91f), 36, () =>
-            {
-                _flagMode = !_flagMode;
-                ApplyFlagButtonColors(_flagToggleBtn, _flagMode);
-            });
-            _flagToggleBg = flagGo.GetComponent<Image>();
-            _flagToggleBtn = flagGo.GetComponent<Button>();
-            // Apply flag-specific ColorBlock (inactive/normal state)
-            ApplyFlagButtonColors(_flagToggleBtn, false);
 
             RefreshDifficultyHighlight();
         }
