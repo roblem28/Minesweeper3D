@@ -121,6 +121,11 @@ namespace Minesweeper3D.Unity
                     _cells[x, y, to].SetActiveSlice(true);
                 }
 
+            // Subtle Y-slide direction for incoming slice
+            const float ySlideOffset = 0.05f;
+            float slideDir = (to > from) ? 1f : -1f;
+            float offset = (_size - 1) * Spacing * 0.5f;
+
             // Animate over TransitionDuration
             float elapsed = 0f;
             while (elapsed < TransitionDuration)
@@ -134,14 +139,31 @@ namespace Minesweeper3D.Unity
                     for (int x = 0; x < _size; x++)
                         _cells[x, y, from].SetTransitionAlpha(oldAlpha);
 
-                // Fade new slice from ghost to active
+                // Fade new slice from ghost to active + Y offset slide
                 float newAlpha = Mathf.Lerp(0.08f, 1f, t);
+                float yOffset = Mathf.Lerp(ySlideOffset * slideDir, 0f, t);
                 for (int y = 0; y < _size; y++)
                     for (int x = 0; x < _size; x++)
-                        _cells[x, y, to].SetTransitionAlpha(newAlpha);
+                    {
+                        var cell = _cells[x, y, to];
+                        cell.SetTransitionAlpha(newAlpha);
+                        var pos = cell.transform.localPosition;
+                        float baseY = y * Spacing - offset;
+                        cell.transform.localPosition = new Vector3(pos.x, baseY + yOffset, pos.z);
+                    }
 
                 yield return null;
             }
+
+            // Reset exact positions for the incoming slice
+            for (int y = 0; y < _size; y++)
+                for (int x = 0; x < _size; x++)
+                {
+                    var cell = _cells[x, y, to];
+                    var pos = cell.transform.localPosition;
+                    float baseY = y * Spacing - offset;
+                    cell.transform.localPosition = new Vector3(pos.x, baseY, pos.z);
+                }
 
             // Final state — full refresh to clean up
             RefreshAll();

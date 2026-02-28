@@ -66,9 +66,9 @@ namespace Minesweeper3D.Unity
             var cam = Camera.main;
             if (cam != null)
             {
-                // Dark background for contrast against cubes
                 cam.clearFlags = CameraClearFlags.SolidColor;
-                cam.backgroundColor = new Color(0.10f, 0.10f, 0.18f, 1f);  // #1A1A2E dark navy
+                cam.backgroundColor = Color.black;
+                CreateBackgroundGradient(cam);
 
                 _cameraController = cam.gameObject.AddComponent<CameraController>();
                 float gridWorldSize = gridSize * SliceController.Spacing;
@@ -272,6 +272,50 @@ namespace Minesweeper3D.Unity
             _sliceController.RefreshAll();
             _highlightController?.RefreshCrossSliceIndicators();
             _hudController?.Refresh();
+        }
+
+        private void CreateBackgroundGradient(Camera cam)
+        {
+            // Create 1x256 gradient texture at runtime
+            var tex = new Texture2D(1, 256, TextureFormat.RGB24, false);
+            Color topColor = new Color(0.08f, 0.08f, 0.16f);     // dark navy
+            Color bottomColor = new Color(0.14f, 0.12f, 0.22f);  // slightly purple
+            for (int i = 0; i < 256; i++)
+            {
+                float t = i / 255f;
+                tex.SetPixel(0, i, Color.Lerp(bottomColor, topColor, t));
+            }
+            tex.Apply();
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = "BackgroundGradient";
+            Destroy(go.GetComponent<Collider>());
+
+            // Parent to camera so it always fills view
+            go.transform.SetParent(cam.transform);
+            float dist = cam.farClipPlane - 1f;
+            go.transform.localPosition = new Vector3(0f, 0f, dist);
+            float height = 2f * dist * Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float width = height * cam.aspect;
+            go.transform.localScale = new Vector3(width, height, 1f);
+            go.transform.localRotation = Quaternion.identity;
+
+            var renderer = go.GetComponent<Renderer>();
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            // Reuse ghost material's shader (URP Unlit) to avoid Shader.Find at runtime
+            if (ghostMaterial != null)
+            {
+                var mat = new Material(ghostMaterial.shader);
+                mat.SetFloat("_Surface", 0f); // opaque
+                mat.SetTexture("_BaseMap", tex);
+                mat.SetColor("_BaseColor", Color.white);
+                mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Background;
+                renderer.material = mat;
+            }
         }
 
         private void OnDestroy()

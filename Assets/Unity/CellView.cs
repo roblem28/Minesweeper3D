@@ -16,11 +16,18 @@ namespace Minesweeper3D.Unity
         private MeshFilter _meshFilter;
         private MeshRenderer _renderer;
         private TextMesh _label;
+        private TextMesh _labelShadow;
         private TextMesh _crossSliceMarker;
         private BoxCollider _collider;
         private MaterialPropertyBlock _propBlock;
         private bool _isActive;
         private Coroutine _hintCoroutine;
+
+        // Animation state
+        private CellState _prevState = CellState.Hidden;
+        private Coroutine _revealPopCoroutine;
+        private bool _minePopped;
+        private Coroutine _minePopCoroutine;
 
         // Shared meshes (created once)
         private static Mesh _cubeMesh;
@@ -34,10 +41,11 @@ namespace Minesweeper3D.Unity
         private const float RevealedScale = 0.52f;
 
         // --- Active slice colors ---
-        private static readonly Color ActiveHidden   = new Color(0.44f, 0.44f, 0.44f, 1f);
-        private static readonly Color ActiveRevealed = new Color(0.75f, 0.75f, 0.75f, 1f);
-        private static readonly Color ActiveFlagged  = new Color(1.00f, 0.20f, 0.20f, 1f);
-        private static readonly Color ActiveMine     = new Color(0.10f, 0.10f, 0.10f, 1f);
+        private static readonly Color ActiveHidden       = new Color(0.949f, 0.949f, 0.949f, 1f);  // #F2F2F2 warm off-white
+        private static readonly Color ActiveRevealed     = new Color(0.831f, 0.831f, 0.831f, 1f);  // #D4D4D4 darker neutral
+        private static readonly Color ActiveFlagged      = new Color(1.00f, 0.20f, 0.20f, 1f);
+        private static readonly Color ActiveMine         = new Color(0.10f, 0.10f, 0.10f, 1f);
+        private static readonly Color ActiveMineRevealed = new Color(0.35f, 0.10f, 0.10f, 1f);     // dark red-tinted
 
         // --- Ghost wire colors (dim yellow wireframe) ---
         private static readonly Color GhostHidden  = new Color(0.67f, 0.67f, 0.27f, 0.15f);
@@ -45,15 +53,18 @@ namespace Minesweeper3D.Unity
         private static readonly Color GhostFlagged = new Color(0.80f, 0.20f, 0.20f, 0.15f);
         private static readonly Color GhostMine    = new Color(0.67f, 0.67f, 0.27f, 0.12f);
 
-        // --- Count label colors (5-tier) ---
+        // --- Count label colors (8-tier classic Minesweeper) ---
         private static readonly Color[] CountColors =
         {
-            Color.clear,                            // 0 (never shown)
-            new Color(0.20f, 0.40f, 0.95f),         // 1 blue
-            new Color(0.15f, 0.70f, 0.15f),         // 2 green
-            new Color(0.90f, 0.15f, 0.15f),         // 3 red
-            new Color(0.45f, 0.15f, 0.65f),         // 4 dark purple
-            new Color(0.95f, 0.55f, 0.10f),         // 5+ orange
+            Color.clear,                                    // 0 (never shown)
+            new Color(0.106f, 0.184f, 0.898f),              // 1 blue
+            new Color(0.110f, 0.549f, 0.110f),              // 2 green
+            new Color(0.898f, 0.125f, 0.125f),              // 3 red
+            new Color(0.071f, 0.071f, 0.478f),              // 4 dark blue
+            new Color(0.502f, 0.000f, 0.125f),              // 5 maroon
+            new Color(0.000f, 0.502f, 0.502f),              // 6 teal
+            new Color(0.05f,  0.05f,  0.05f),               // 7 black
+            new Color(0.50f,  0.50f,  0.50f),               // 8 gray
         };
 
         public Coord3 Coord => new Coord3(_x, _y, _z);
@@ -80,6 +91,19 @@ namespace Minesweeper3D.Unity
             _propBlock = new MaterialPropertyBlock();
 
             EnsureSharedMeshes();
+
+            // Label shadow — slightly offset for drop shadow effect
+            var shadowObj = new GameObject("LabelShadow");
+            shadowObj.transform.SetParent(transform);
+            shadowObj.transform.localPosition = new Vector3(0.012f, 0.41f, 0.012f);
+            _labelShadow = shadowObj.AddComponent<TextMesh>();
+            _labelShadow.alignment = TextAlignment.Center;
+            _labelShadow.anchor = TextAnchor.MiddleCenter;
+            _labelShadow.characterSize = 0.315f;
+            _labelShadow.fontSize = 58;
+            _labelShadow.fontStyle = FontStyle.Bold;
+            _labelShadow.text = "";
+            _labelShadow.color = new Color(0f, 0f, 0f, 0.35f);
 
             // Label child — positioned just above top face
             var labelObj = new GameObject("Label");
@@ -160,17 +184,22 @@ namespace Minesweeper3D.Unity
 
         private void UpdateActive(CellState state, int count, bool isMine, bool gameOver)
         {
+            if (!gameOver) _minePopped = false;
+
             _renderer.enabled = true;
             _label.gameObject.SetActive(true);
-            _label.text = "";
+            _labelShadow.gameObject.SetActive(true);
+            SetLabelText("");
 
             // Game over: expose unflagged mines
             if (gameOver && isMine && state != CellState.Flagged)
             {
-                ApplyColor(ActiveMine);
+                ApplyColor(ActiveMineRevealed);
                 SetScale(CubeScale);
-                _label.text = "X";
-                _label.color = new Color(0.9f, 0.15f, 0.15f);
+                SetLabelText("\u25CF"); // ● solid circle
+                _label.color = new Color(0.08f, 0.08f, 0.08f);
+                PlayMinePopIfNeeded();
+                _prevState = state;
                 return;
             }
 
@@ -184,7 +213,7 @@ namespace Minesweeper3D.Unity
                 case CellState.Flagged:
                     ApplyColor(ActiveFlagged);
                     SetScale(CubeScale);
-                    _label.text = "F";
+                    SetLabelText("F");
                     _label.color = Color.white;
                     break;
 
@@ -193,17 +222,27 @@ namespace Minesweeper3D.Unity
                     {
                         _renderer.enabled = false;
                         _label.gameObject.SetActive(false);
+                        _labelShadow.gameObject.SetActive(false);
                     }
                     else
                     {
                         ApplyColor(ActiveRevealed);
                         SetScale(RevealedScale);
-                        _label.text = count.ToString();
+                        SetLabelText(count.ToString());
                         int ci = Mathf.Min(count, CountColors.Length - 1);
                         _label.color = CountColors[ci];
+
+                        // Trigger pop on fresh reveal
+                        if (_prevState != CellState.Revealed)
+                        {
+                            if (_revealPopCoroutine != null) StopCoroutine(_revealPopCoroutine);
+                            _revealPopCoroutine = StartCoroutine(RevealPopRoutine());
+                        }
                     }
                     break;
             }
+
+            _prevState = state;
         }
 
         // ----- Ghost slice rendering -----
@@ -211,6 +250,7 @@ namespace Minesweeper3D.Unity
         private void UpdateGhost(CellState state, int count, bool isMine, bool gameOver)
         {
             _label.gameObject.SetActive(false);
+            _labelShadow.gameObject.SetActive(false);
             HideCrossSliceMarker();
             SetScale(CubeScale);
 
@@ -246,6 +286,53 @@ namespace Minesweeper3D.Unity
                     }
                     break;
             }
+        }
+
+        // ----- Animations -----
+
+        private IEnumerator RevealPopRoutine()
+        {
+            float duration = 0.1f;
+            float elapsed = 0f;
+            float startScale = RevealedScale * 1.05f;
+            transform.localScale = Vector3.one * startScale;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                float eased = 1f - (1f - t) * (1f - t); // ease-out quadratic
+                float s = Mathf.Lerp(startScale, RevealedScale, eased);
+                transform.localScale = Vector3.one * s;
+                yield return null;
+            }
+            SetScale(RevealedScale);
+            _revealPopCoroutine = null;
+        }
+
+        private void PlayMinePopIfNeeded()
+        {
+            if (_minePopped) return;
+            _minePopped = true;
+            if (_minePopCoroutine != null) StopCoroutine(_minePopCoroutine);
+            _minePopCoroutine = StartCoroutine(MinePopRoutine());
+        }
+
+        private IEnumerator MinePopRoutine()
+        {
+            float duration = 0.15f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                float scale = t < 0.5f
+                    ? Mathf.Lerp(CubeScale, CubeScale * 1.1f, t * 2f)
+                    : Mathf.Lerp(CubeScale * 1.1f, CubeScale, (t - 0.5f) * 2f);
+                transform.localScale = Vector3.one * scale;
+                yield return null;
+            }
+            SetScale(CubeScale);
+            _minePopCoroutine = null;
         }
 
         // ----- Transition support -----
@@ -338,6 +425,12 @@ namespace Minesweeper3D.Unity
 
         // ----- Helpers -----
 
+        private void SetLabelText(string text)
+        {
+            _label.text = text;
+            _labelShadow.text = text;
+        }
+
         private void ApplyColor(Color c)
         {
             _propBlock.SetColor("_BaseColor", c); // URP
@@ -356,7 +449,10 @@ namespace Minesweeper3D.Unity
             var camRot = Camera.main.transform.rotation;
             // Billboard label toward camera (active cells with visible text only)
             if (_label != null && _label.text.Length > 0)
+            {
                 _label.transform.rotation = camRot;
+                _labelShadow.transform.rotation = camRot;
+            }
             // Billboard cross-slice marker
             if (_crossSliceMarker != null && _crossSliceMarker.gameObject.activeSelf)
                 _crossSliceMarker.transform.rotation = camRot;

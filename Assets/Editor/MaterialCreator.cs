@@ -34,8 +34,8 @@ namespace Minesweeper3D.Editor
             Material opaque;
             {
                 var mat = new Material(simpleLit);
-                mat.SetColor("_BaseColor", new Color(0.44f, 0.44f, 0.44f, 1f));
-                mat.color = new Color(0.44f, 0.44f, 0.44f, 1f);
+                mat.SetColor("_BaseColor", new Color(0.949f, 0.949f, 0.949f, 1f));
+                mat.color = new Color(0.949f, 0.949f, 0.949f, 1f);
                 if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
                 if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
                 if (mat.HasProperty("_SpecColor"))
