@@ -759,8 +759,9 @@ namespace Minesweeper3D.Unity
                 cb.colorMultiplier = 1f;
                 btn.colors = cb;
 
-                // Green left accent bar for active difficulty
-                EnsureAccentBar(btn.gameObject, on);
+                // Colored left accent bar for active difficulty (green/yellow/red)
+                Color accentColor = i switch { 0 => AccentGreen, 1 => new Color(1f, 0.85f, 0f, 1f), _ => new Color(1f, 0.25f, 0.25f, 1f) };
+                EnsureAccentBar(btn.gameObject, on, accentColor);
                 // Border outline for all buttons
                 EnsureButtonBorder(btn.gameObject);
             }
@@ -774,7 +775,7 @@ namespace Minesweeper3D.Unity
             if (_flagToggleBtn != null) EnsureButtonBorder(_flagToggleBtn.gameObject);
         }
 
-        private void EnsureAccentBar(GameObject btnGo, bool active)
+        private void EnsureAccentBar(GameObject btnGo, bool active, Color color)
         {
             var existing = btnGo.transform.Find("AccentBar");
             if (active)
@@ -790,12 +791,13 @@ namespace Minesweeper3D.Unity
                     rt.sizeDelta = new Vector2(6f, 0f);
                     rt.anchoredPosition = new Vector2(2f, 0f);
                     var img = bar.AddComponent<Image>();
-                    img.color = AccentGreen;
+                    img.color = color;
                     img.raycastTarget = false;
                 }
                 else
                 {
                     existing.gameObject.SetActive(true);
+                    existing.GetComponent<Image>().color = color;
                 }
             }
             else if (existing != null)
