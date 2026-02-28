@@ -307,11 +307,11 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            _endTitle      = MakeLabel(_endPanel.transform, "EndTitle", "", 52, 50f);
-            _endTime       = MakeLabel(_endPanel.transform, "EndTime", "", 30, 36f);
-            _endHints      = MakeLabel(_endPanel.transform, "EndHints", "", 30, 36f);
-            _endScore      = MakeLabel(_endPanel.transform, "EndScore", "", 36, 40f);
-            _endDifficulty = MakeLabel(_endPanel.transform, "EndDifficulty", "", 26, 36f);
+            _endTitle      = MakeLabel(_endPanel.transform, "EndTitle", "", 72, 70f);
+            _endTime       = MakeLabel(_endPanel.transform, "EndTime", "", 38, 44f);
+            _endHints      = MakeLabel(_endPanel.transform, "EndHints", "", 38, 44f);
+            _endScore      = MakeLabel(_endPanel.transform, "EndScore", "", 46, 52f);
+            _endDifficulty = MakeLabel(_endPanel.transform, "EndDifficulty", "", 32, 42f);
             _endDifficulty.color = new Color(0.6f, 0.6f, 0.7f);
 
             var newGameBtn = MakeButton(_endPanel.transform, "Btn_EndNewGame", "New Game", new Vector2(336f, 78f), 30, () =>
