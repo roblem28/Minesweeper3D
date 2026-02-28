@@ -334,7 +334,7 @@ namespace Minesweeper3D.Unity
             rt.anchorMin = new Vector2(1f, 0.5f);
             rt.anchorMax = new Vector2(1f, 0.5f);
             rt.pivot = new Vector2(1f, 0.5f);
-            rt.sizeDelta = new Vector2(120f, 320f);
+            rt.sizeDelta = new Vector2(150f, 400f);
             rt.anchoredPosition = new Vector2(-5f, 0f);
 
             var bg = panel.AddComponent<Image>();
@@ -342,8 +342,8 @@ namespace Minesweeper3D.Unity
             bg.raycastTarget = false;
 
             var layout = panel.AddComponent<VerticalLayoutGroup>();
-            layout.padding = new RectOffset(5, 5, 5, 5);
-            layout.spacing = 6f;
+            layout.padding = new RectOffset(6, 6, 6, 6);
+            layout.spacing = 8f;
             layout.childAlignment = TextAnchor.MiddleCenter;
             layout.childControlWidth = false;
             layout.childControlHeight = false;
@@ -351,18 +351,18 @@ namespace Minesweeper3D.Unity
             layout.childForceExpandHeight = false;
 
             // UP arrow
-            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(108f, 108f), 34, () =>
+            _sliceUpBtn = MakeButton(panel.transform, "Btn_SliceUp", "\u25B2", new Vector2(135f, 135f), 42, () =>
             {
                 _game.HandleSliceChangePublic(1);
             });
             EnsureButtonBorder(_sliceUpBtn);
 
             // Slice label
-            _sliceNavText = MakeLabel(panel.transform, "SliceNavText", "1/4", 30, 60f);
-            _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(90f, 60f);
+            _sliceNavText = MakeLabel(panel.transform, "SliceNavText", "1/4", 38, 75f);
+            _sliceNavText.GetComponent<RectTransform>().sizeDelta = new Vector2(112f, 75f);
 
             // DOWN arrow
-            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(108f, 108f), 34, () =>
+            _sliceDownBtn = MakeButton(panel.transform, "Btn_SliceDown", "\u25BC", new Vector2(135f, 135f), 42, () =>
             {
                 _game.HandleSliceChangePublic(-1);
             });
