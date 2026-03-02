@@ -17,19 +17,28 @@ namespace Minesweeper3D.Unity
         private CellView[,,] _cells;
         private Coroutine _transition;
 
-        public const float Spacing = 1.2f;
-        private const float CubeScale = 0.8f;
-        private const float TransitionDuration = 0.15f;
+        public const float Spacing = 1.3f;
+        private const float CubeScale = 0.6f;
+        private const float TransitionDuration = 0.20f;
+        private const float GhostAlphaResting = 0.25f;
+        private const float GhostAlphaPulse = 0.15f;
+        private const float PulseDuration = 0.15f;
 
         public int CurrentSlice => _currentSlice;
         public int Size => _size;
+
+        public CellView GetCell(Coord3 c) => _cells[c.X, c.Y, c.Z];
 
         public void Init(int size, GameController game)
         {
             _size = size;
             _game = game;
-            _currentSlice = size / 2;
+            _currentSlice = 0;
             _cells = new CellView[size, size, size];
+
+            // Pass inspector-assigned materials to CellView before building grid
+            CellView.SetSharedMaterials(game.OpaqueMaterial, game.GhostMaterial);
+
             BuildGrid();
             CreateFloorPlane();
             RefreshAll();
@@ -80,36 +89,12 @@ namespace Minesweeper3D.Unity
             var col = go.GetComponent<Collider>();
             if (col != null) Destroy(col);
 
-            // Subtle dark transparent material
+            // Use inspector-assigned floor material — no Shader.Find, no new Material
             var renderer = go.GetComponent<Renderer>();
-            var mat = new Material(renderer.sharedMaterial);
-
-            // URP Lit shader
-            if (mat.HasProperty("_Surface"))
-            {
-                mat.SetFloat("_Surface", 1f);
-                mat.SetOverrideTag("RenderType", "Transparent");
-                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-                mat.EnableKeyword("_ALPHABLEND_ON");
-            }
-            // Standard shader fallback
-            if (mat.HasProperty("_Mode"))
-            {
-                mat.SetFloat("_Mode", 3f);
-                mat.EnableKeyword("_ALPHABLEND_ON");
-            }
-            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-            mat.SetInt("_ZWrite", 0);
-            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
-
-            var color = new Color(0.15f, 0.18f, 0.28f, 0.4f);
-            if (mat.HasProperty("_BaseColor"))
-                mat.SetColor("_BaseColor", color);
-            if (mat.HasProperty("_Color"))
-                mat.SetColor("_Color", color);
-
-            renderer.sharedMaterial = mat;
+            renderer.receiveShadows = true;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            if (_game.FloorMaterial != null)
+                renderer.sharedMaterial = _game.FloorMaterial;
         }
 
         public void SetSlice(int z)
@@ -139,27 +124,63 @@ namespace Minesweeper3D.Unity
                     _cells[x, y, to].SetActiveSlice(true);
                 }
 
-            // Animate over TransitionDuration
+            // Subtle Y-slide direction for incoming slice
+            const float ySlideOffset = 0.05f;
+            float slideDir = (to > from) ? 1f : -1f;
+            float offset = (_size - 1) * Spacing * 0.5f;
+
+            // Phase 1: Main transition (0.2s) — fade active↔ghost + pulse inactive layers
             float elapsed = 0f;
             while (elapsed < TransitionDuration)
             {
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / TransitionDuration);
+                float eased = 1f - (1f - t) * (1f - t); // ease-out quadratic
 
-                // Fade old slice from active to ghost
-                float oldAlpha = Mathf.Lerp(1f, 0.08f, t);
+                // Fade old slice from active to resting ghost
+                float oldAlpha = Mathf.Lerp(1f, GhostAlphaResting, eased);
                 for (int y = 0; y < _size; y++)
                     for (int x = 0; x < _size; x++)
                         _cells[x, y, from].SetTransitionAlpha(oldAlpha);
 
-                // Fade new slice from ghost to active
-                float newAlpha = Mathf.Lerp(0.08f, 1f, t);
+                // Fade new slice from ghost to active + Y offset slide
+                float newAlpha = Mathf.Lerp(GhostAlphaResting, 1f, eased);
+                float yOffset = Mathf.Lerp(ySlideOffset * slideDir, 0f, eased);
                 for (int y = 0; y < _size; y++)
                     for (int x = 0; x < _size; x++)
-                        _cells[x, y, to].SetTransitionAlpha(newAlpha);
+                    {
+                        var cell = _cells[x, y, to];
+                        cell.SetTransitionAlpha(newAlpha);
+                        var pos = cell.transform.localPosition;
+                        float baseY = y * Spacing - offset;
+                        cell.transform.localPosition = new Vector3(pos.x, baseY + yOffset, pos.z);
+                    }
+
+                // Pulse: briefly dim all other inactive layers to 0.15 then ease back
+                float pulseT = Mathf.Clamp01(elapsed / PulseDuration);
+                float pulseAlpha = pulseT < 0.5f
+                    ? Mathf.Lerp(GhostAlphaResting, GhostAlphaPulse, pulseT * 2f)
+                    : Mathf.Lerp(GhostAlphaPulse, GhostAlphaResting, (pulseT - 0.5f) * 2f);
+                for (int z = 0; z < _size; z++)
+                {
+                    if (z == from || z == to) continue;
+                    for (int y = 0; y < _size; y++)
+                        for (int x = 0; x < _size; x++)
+                            _cells[x, y, z].SetTransitionAlpha(pulseAlpha);
+                }
 
                 yield return null;
             }
+
+            // Reset exact positions for the incoming slice
+            for (int y = 0; y < _size; y++)
+                for (int x = 0; x < _size; x++)
+                {
+                    var cell = _cells[x, y, to];
+                    var pos = cell.transform.localPosition;
+                    float baseY = y * Spacing - offset;
+                    cell.transform.localPosition = new Vector3(pos.x, baseY, pos.z);
+                }
 
             // Final state — full refresh to clean up
             RefreshAll();

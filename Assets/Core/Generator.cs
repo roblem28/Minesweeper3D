@@ -11,18 +11,50 @@ namespace Minesweeper3D.Core
     {
         /// <summary>
         /// Generate a board with mines placed randomly (seeded),
-        /// guaranteeing first-click cell and its 26 neighbors are safe.
+        /// guaranteeing first-click cell and its 6 face-neighbors are safe.
         /// </summary>
-        /// <param name="size">Side length N for NxNxN grid.</param>
-        /// <param name="mineCount">Number of mines to place.</param>
-        /// <param name="firstClick">First click coordinate (protected zone).</param>
-        /// <param name="seed">RNG seed for determinism.</param>
-        /// <returns>A new Board instance.</returns>
+        private const int MaxRegenerationAttempts = 50;
+        private const float MaxFirstClickRevealRatio = 0.40f;
+        private const int MaxMineBoosts = 10;
+
         public static Board Generate(int size, int mineCount, Coord3 firstClick, int seed)
         {
             int total = size * size * size;
+            // Exclusion set is firstClick + up to 6 neighbors = 7 cells
+            int maxMines = total - 7;
+            int currentMines = mineCount;
 
-            // Build exclusion set: firstClick + its 26 neighbors
+            for (int boost = 0; boost <= MaxMineBoosts; boost++)
+            {
+                for (int attempt = 0; attempt < MaxRegenerationAttempts; attempt++)
+                {
+                    var board = GenerateBoard(size, currentMines, firstClick, seed + attempt);
+
+                    int totalSafe = total - currentMines;
+                    int revealed = SimulateReveal(board, firstClick);
+                    if (revealed <= (int)(totalSafe * MaxFirstClickRevealRatio))
+                        return board;
+                }
+
+                // All attempts exceeded threshold — add more mines and retry
+                if (currentMines + 1 <= maxMines)
+                {
+                    currentMines++;
+                    seed += MaxRegenerationAttempts; // fresh seed range
+                }
+                else
+                    break;
+            }
+
+            // Should be extremely rare — return last generated board
+            return GenerateBoard(size, currentMines, firstClick, seed);
+        }
+
+        private static Board GenerateBoard(int size, int mineCount, Coord3 firstClick, int seed)
+        {
+            int total = size * size * size;
+
+            // Build exclusion set: firstClick + its 6 face-neighbors
             var excluded = new HashSet<int>();
             var tempBoard = new Board(size, Array.Empty<Coord3>());
 
@@ -58,6 +90,28 @@ namespace Minesweeper3D.Core
             }
 
             return new Board(size, mineCoords);
+        }
+
+        /// <summary>
+        /// Simulate a reveal at the given coord and return how many safe cells would be revealed.
+        /// Does not mutate the board — creates a temporary copy for simulation.
+        /// </summary>
+        private static int SimulateReveal(Board board, Coord3 click)
+        {
+            // Create a duplicate board for simulation
+            int size = board.Size;
+            var mineCoords = new List<Coord3>();
+            for (int z = 0; z < size; z++)
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var c = new Coord3(x, y, z);
+                if (board.IsMine(c)) mineCoords.Add(c);
+            }
+
+            var simBoard = new Board(size, mineCoords);
+            simBoard.Reveal(click);
+            return simBoard.RevealedSafeCount;
         }
     }
 }

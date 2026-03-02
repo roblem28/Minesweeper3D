@@ -20,6 +20,19 @@ namespace Minesweeper3D.Core
         private int _revealedSafeCount;
         private readonly int _totalSafe;
         private int _flagCount;
+        private int _correctFlagCount;
+
+        /// <summary>Cells revealed during the most recent Reveal() call, in flood-fill order.</summary>
+        private readonly List<Coord3> _lastRevealed = new List<Coord3>();
+        public IReadOnlyList<Coord3> LastRevealed => _lastRevealed;
+
+        // The 6 face-adjacent directions (±1 on exactly one axis)
+        private static readonly int[,] Faces6Dirs =
+        {
+            { 1, 0, 0}, {-1, 0, 0},
+            { 0, 1, 0}, { 0,-1, 0},
+            { 0, 0, 1}, { 0, 0,-1}
+        };
 
         /// <summary>Create a board of given size with mines pre-placed.</summary>
         /// <param name="size">Side length (NxNxN).</param>
@@ -76,6 +89,7 @@ namespace Minesweeper3D.Core
         /// </summary>
         public RevealResult Reveal(Coord3 c)
         {
+            _lastRevealed.Clear();
             if (!InBounds(c)) return RevealResult.OutOfBounds;
             if (Status != GameStatus.Playing) return RevealResult.AlreadyRevealed;
 
@@ -106,26 +120,28 @@ namespace Minesweeper3D.Core
                 case CellState.Hidden:
                     _states[idx] = CellState.Flagged;
                     _flagCount++;
+                    if (_mines[idx]) _correctFlagCount++;
+                    CheckWin();
                     return true;
                 case CellState.Flagged:
                     _states[idx] = CellState.Hidden;
                     _flagCount--;
+                    if (_mines[idx]) _correctFlagCount--;
                     return true;
                 default:
                     return false;
             }
         }
 
-        /// <summary>Get all 26-adjacent neighbors in bounds.</summary>
+        /// <summary>Get face-adjacent neighbors (6-neighbor mode, no diagonals).</summary>
         public List<Coord3> GetNeighbors(Coord3 c)
         {
-            var result = new List<Coord3>(26);
-            for (int dx = -1; dx <= 1; dx++)
-            for (int dy = -1; dy <= 1; dy++)
-            for (int dz = -1; dz <= 1; dz++)
+            var result = new List<Coord3>(6);
+            for (int i = 0; i < 6; i++)
             {
-                if (dx == 0 && dy == 0 && dz == 0) continue;
-                var n = new Coord3(c.X + dx, c.Y + dy, c.Z + dz);
+                var n = new Coord3(c.X + Faces6Dirs[i, 0],
+                                   c.Y + Faces6Dirs[i, 1],
+                                   c.Z + Faces6Dirs[i, 2]);
                 if (InBounds(n))
                     result.Add(n);
             }
@@ -139,6 +155,78 @@ namespace Minesweeper3D.Core
             for (int i = 0; i < _mines.Length; i++)
                 if (_mines[i]) count++;
             return count;
+        }
+
+        /// <summary>
+        /// Chord: if a revealed cell's count equals its flagged neighbor count,
+        /// reveal all unflagged hidden neighbors. May trigger flood-fill or loss.
+        /// </summary>
+        public bool ChordReveal(Coord3 c)
+        {
+            if (!InBounds(c) || Status != GameStatus.Playing) return false;
+            int idx = FlatIndex(c);
+            if (_states[idx] != CellState.Revealed) return false;
+
+            int count = _counts[idx];
+            if (count == 0) return false;
+
+            int flagged = CountFlaggedNeighbors(c);
+            if (flagged != count) return false;
+
+            bool anyRevealed = false;
+            foreach (var n in GetNeighbors(c))
+            {
+                int ni = FlatIndex(n);
+                if (_states[ni] != CellState.Hidden) continue;
+
+                if (_mines[ni])
+                {
+                    _states[ni] = CellState.Revealed;
+                    Status = GameStatus.Lost;
+                    anyRevealed = true;
+                }
+                else
+                {
+                    FloodFill(n);
+                    anyRevealed = true;
+                }
+            }
+
+            if (anyRevealed && Status == GameStatus.Playing)
+                CheckWin();
+
+            return anyRevealed;
+        }
+
+        /// <summary>Count flagged neighbors of a cell.</summary>
+        public int CountFlaggedNeighbors(Coord3 c)
+        {
+            int flagged = 0;
+            foreach (var n in GetNeighbors(c))
+            {
+                if (_states[FlatIndex(n)] == CellState.Flagged)
+                    flagged++;
+            }
+            return flagged;
+        }
+
+        /// <summary>Check if any cross-slice (dz != 0) neighbor is Hidden or Flagged.</summary>
+        public void GetCrossSliceStatus(Coord3 c, out bool hasAbove, out bool hasBelow)
+        {
+            hasAbove = false;
+            hasBelow = false;
+            foreach (var n in GetNeighbors(c))
+            {
+                int dz = n.Z - c.Z;
+                if (dz == 0) continue;
+                var state = _states[FlatIndex(n)];
+                if (state == CellState.Hidden || state == CellState.Flagged)
+                {
+                    if (dz > 0) hasAbove = true;
+                    else hasBelow = true;
+                }
+                if (hasAbove && hasBelow) return;
+            }
         }
 
         // --- Internals ---
@@ -181,6 +269,7 @@ namespace Minesweeper3D.Core
 
                 _states[idx] = CellState.Revealed;
                 _revealedSafeCount++;
+                _lastRevealed.Add(c);
 
                 // Only expand if this cell's count is 0
                 if (_counts[idx] == 0)
@@ -198,6 +287,13 @@ namespace Minesweeper3D.Core
         private void CheckWin()
         {
             if (_revealedSafeCount >= _totalSafe)
+            {
+                Status = GameStatus.Won;
+                return;
+            }
+
+            // Win by flagging: all mines flagged, no incorrect flags
+            if (_correctFlagCount == _mineCount && _flagCount == _mineCount)
                 Status = GameStatus.Won;
         }
     }

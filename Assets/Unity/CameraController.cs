@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 namespace Minesweeper3D.Unity
@@ -21,17 +22,22 @@ namespace Minesweeper3D.Unity
         private float _distance;
         private float _azimuth;
         private float _elevation;
+        private Light _directionalLight;
 
         public void Init(Vector3 target, float gridWorldSize)
         {
             _target = target;
 
-            // Auto-frame: calculate distance from grid size and camera FOV
+            // Auto-frame: fit full grid visible on phone landscape (use vertical FOV)
             var cam = GetComponent<Camera>();
             if (cam != null && cam.fieldOfView > 0f)
             {
                 float halfFov = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
-                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(halfFov) * 1.3f;
+                float aspect = cam.aspect > 0f ? cam.aspect : 16f / 9f;
+                // Use the tighter axis (vertical on landscape phones)
+                float halfFovH = Mathf.Atan(Mathf.Tan(halfFov) * aspect);
+                float fov = Mathf.Min(halfFov, halfFovH);
+                _distance = (gridWorldSize * 0.5f) / Mathf.Tan(fov) * 1.75f;
             }
             else
             {
@@ -39,8 +45,19 @@ namespace Minesweeper3D.Unity
             }
             _distance = Mathf.Clamp(_distance, minDistance, maxDistance);
 
-            _azimuth = 45f;    // diagonal view
-            _elevation = 30f;  // looking down at the cube
+            _azimuth = 0f;     // flat front view
+            _elevation = 0f;   // no vertical angle — head-on
+
+            // Find directional light so shadows follow camera orbit
+            foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+            {
+                if (light.type == LightType.Directional)
+                {
+                    _directionalLight = light;
+                    break;
+                }
+            }
+
             ApplyPosition();
         }
 
@@ -62,6 +79,37 @@ namespace Minesweeper3D.Unity
             _distance = Mathf.Clamp(_distance, minDistance, maxDistance);
         }
 
+        // ----- Camera Shake -----
+
+        private Vector3 _shakeOffset;
+        private Coroutine _shakeCoroutine;
+
+        /// <summary>Trigger a camera shake (duration in seconds, intensity in world units).</summary>
+        public void Shake(float duration = 0.3f, float intensity = 0.15f)
+        {
+            if (_shakeCoroutine != null) StopCoroutine(_shakeCoroutine);
+            _shakeCoroutine = StartCoroutine(ShakeRoutine(duration, intensity));
+        }
+
+        private IEnumerator ShakeRoutine(float duration, float intensity)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float t = 1f - (elapsed / duration);
+                float magnitude = intensity * t;
+                _shakeOffset = new Vector3(
+                    Random.Range(-1f, 1f) * magnitude,
+                    Random.Range(-1f, 1f) * magnitude,
+                    Random.Range(-1f, 1f) * magnitude * 0.5f
+                );
+                yield return null;
+            }
+            _shakeOffset = Vector3.zero;
+            _shakeCoroutine = null;
+        }
+
         private void ApplyPosition()
         {
             float azRad = _azimuth * Mathf.Deg2Rad;
@@ -71,8 +119,12 @@ namespace Minesweeper3D.Unity
             float y =  _distance * Mathf.Sin(elRad);
             float z = -_distance * Mathf.Cos(elRad) * Mathf.Cos(azRad);
 
-            transform.position = _target + new Vector3(x, y, z);
+            transform.position = _target + new Vector3(x, y, z) + _shakeOffset;
             transform.LookAt(_target);
+
+            // Keep light casting from above-behind the camera so shadows move with orbit
+            if (_directionalLight != null)
+                _directionalLight.transform.rotation = Quaternion.Euler(_elevation + 20f, _azimuth, 0f);
         }
     }
 }
