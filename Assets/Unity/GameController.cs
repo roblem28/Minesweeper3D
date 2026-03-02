@@ -149,6 +149,7 @@ namespace Minesweeper3D.Unity
                 Board.Reveal(coord);
                 _timer.StartTimer();
                 _feedback?.PlayTap();
+                _feedback?.VibrateLight();
                 int cascadeCount = Board.LastRevealed.Count;
                 if (cascadeCount > 1) _feedback?.PlayRevealCascade(cascadeCount);
                 RefreshWithCascade();
@@ -160,8 +161,12 @@ namespace Minesweeper3D.Unity
             if (rv == RevealResult.Ok || rv == RevealResult.Mine)
             {
                 _feedback?.PlayTap();
-                if (rv == RevealResult.Ok && Board.LastRevealed.Count > 1)
-                    _feedback?.PlayRevealCascade(Board.LastRevealed.Count);
+                if (rv == RevealResult.Ok)
+                {
+                    _feedback?.VibrateLight();
+                    if (Board.LastRevealed.Count > 1)
+                        _feedback?.PlayRevealCascade(Board.LastRevealed.Count);
+                }
                 if (rv == RevealResult.Mine)
                 {
                     StartCoroutine(MineExplosionSequence(coord));

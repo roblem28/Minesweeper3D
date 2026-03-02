@@ -360,7 +360,15 @@ namespace Minesweeper3D.Unity.LayeredMode
         private void RefreshLayerHighlight()
         {
             for (int i = 0; i < _layerButtons.Length; i++)
-                _layerButtonBgs[i].color = (i == _game.CurrentLayer) ? ActiveColor : InactiveColor;
+            {
+                bool on = (i == _game.CurrentLayer);
+                _layerButtonBgs[i].color = on ? ActiveColor : InactiveColor;
+
+                float scale = on ? 1.05f : 1f;
+                _layerButtons[i].transform.localScale = Vector3.one * scale;
+                var pressEffect = _layerButtons[i].GetComponent<LayeredButtonPressEffect>();
+                if (pressEffect != null) pressEffect.SetBaseScale(scale);
+            }
         }
 
         // ========== UI FACTORY ==========
@@ -417,7 +425,51 @@ namespace Minesweeper3D.Unity.LayeredMode
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.raycastTarget = false;
 
+            go.AddComponent<LayeredButtonPressEffect>();
+
             return go;
+        }
+    }
+
+    public class LayeredButtonPressEffect : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+    {
+        private Vector3 _baseScale = Vector3.one;
+        private Coroutine _anim;
+
+        public void SetBaseScale(float scale)
+        {
+            _baseScale = Vector3.one * scale;
+            if (_anim == null)
+                transform.localScale = _baseScale;
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (_anim != null) StopCoroutine(_anim);
+            _anim = StartCoroutine(ScaleTo(_baseScale * 0.92f));
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            if (_anim != null) StopCoroutine(_anim);
+            _anim = StartCoroutine(ScaleTo(_baseScale));
+        }
+
+        private IEnumerator ScaleTo(Vector3 target)
+        {
+            Vector3 start = transform.localScale;
+            float duration = 0.04f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float eased = 1f - (1f - t) * (1f - t);
+                transform.localScale = Vector3.Lerp(start, target, eased);
+                yield return null;
+            }
+            transform.localScale = target;
+            _anim = null;
         }
     }
 }

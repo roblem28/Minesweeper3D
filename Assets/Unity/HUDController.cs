@@ -759,6 +759,12 @@ namespace Minesweeper3D.Unity
                 cb.colorMultiplier = 1f;
                 btn.colors = cb;
 
+                // Active difficulty gets slight scale-up
+                float scale = on ? 1.05f : 1f;
+                btn.transform.localScale = Vector3.one * scale;
+                var pressEffect = btn.GetComponent<ButtonPressEffect>();
+                if (pressEffect != null) pressEffect.SetBaseScale(scale);
+
                 // Colored left accent bar for active difficulty (green/yellow/red)
                 Color accentColor = i switch { 0 => AccentGreen, 1 => new Color(1f, 0.85f, 0f, 1f), _ => new Color(1f, 0.25f, 0.25f, 1f) };
                 EnsureAccentBar(btn.gameObject, on, accentColor);
@@ -1024,7 +1030,51 @@ namespace Minesweeper3D.Unity
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.raycastTarget = false;
 
+            go.AddComponent<ButtonPressEffect>();
+
             return go;
+        }
+    }
+
+    public class ButtonPressEffect : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
+    {
+        private Vector3 _baseScale = Vector3.one;
+        private Coroutine _anim;
+
+        public void SetBaseScale(float scale)
+        {
+            _baseScale = Vector3.one * scale;
+            if (_anim == null)
+                transform.localScale = _baseScale;
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (_anim != null) StopCoroutine(_anim);
+            _anim = StartCoroutine(ScaleTo(_baseScale * 0.92f));
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+            if (_anim != null) StopCoroutine(_anim);
+            _anim = StartCoroutine(ScaleTo(_baseScale));
+        }
+
+        private IEnumerator ScaleTo(Vector3 target)
+        {
+            Vector3 start = transform.localScale;
+            float duration = 0.04f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float eased = 1f - (1f - t) * (1f - t); // ease-out quadratic
+                transform.localScale = Vector3.Lerp(start, target, eased);
+                yield return null;
+            }
+            transform.localScale = target;
+            _anim = null;
         }
     }
 }
