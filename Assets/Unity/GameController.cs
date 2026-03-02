@@ -371,19 +371,20 @@ namespace Minesweeper3D.Unity
             }
 
             // Step 4: DISSOLVE — wait for fragments to fade, then show game over
-            // Refresh all remaining cells to show revealed mines
             _timer.StopTimer();
+
+            // Show revealed mines on remaining cells, but do NOT refresh HUD yet
+            // (HUD refresh triggers the Game Over panel)
             _sliceController.RefreshAll();
             _highlightController?.RefreshCrossSliceIndicators();
-            _hudController?.Refresh();
 
             // Play lose sound
             _feedback?.PlayLose();
 
-            // Wait for fragments to dissolve before game-over UI settles
-            yield return new WaitForSecondsRealtime(1.2f);
+            // Wait for fragment dissolve (1.5s lifetime) before showing Game Over UI
+            yield return new WaitForSecondsRealtime(1.5f);
 
-            // Final HUD refresh for game-over state
+            // Now show Game Over — HUD Refresh triggers ShowEndPanel
             _hudController?.Refresh();
         }
 
