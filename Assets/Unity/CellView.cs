@@ -596,6 +596,97 @@ namespace Minesweeper3D.Unity
                 _crossSliceMarker.gameObject.SetActive(false);
         }
 
+        // ----- Explosion VFX -----
+
+        private static readonly string FragmentTag = "ExplosionFragment";
+
+        /// <summary>
+        /// Fracture this cube into 8 sub-pieces that fly outward with physics.
+        /// The original cell renderer is hidden. Fragments auto-destroy after 2s.
+        /// </summary>
+        public void Explode()
+        {
+            _renderer.enabled = false;
+            _label.gameObject.SetActive(false);
+            _labelShadow.gameObject.SetActive(false);
+
+            float half = transform.localScale.x * 0.5f;
+            float fragScale = half; // each fragment is half the cube size
+
+            for (int x = -1; x <= 1; x += 2)
+            for (int y = -1; y <= 1; y += 2)
+            for (int z = -1; z <= 1; z += 2)
+            {
+                var frag = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                frag.name = FragmentTag;
+                frag.tag = "Untagged";
+                frag.transform.position = transform.position
+                    + new Vector3(x, y, z) * fragScale * 0.25f;
+                frag.transform.localScale = Vector3.one * fragScale;
+
+                // Copy material color
+                var fragRenderer = frag.GetComponent<Renderer>();
+                fragRenderer.sharedMaterial = _renderer.sharedMaterial;
+                var pb = new MaterialPropertyBlock();
+                _renderer.GetPropertyBlock(_propBlock);
+                pb.SetColor("_BaseColor", _propBlock.GetColor("_BaseColor"));
+                pb.SetColor("_Color", _propBlock.GetColor("_Color"));
+                fragRenderer.SetPropertyBlock(pb);
+
+                // Physics
+                var rb = frag.AddComponent<Rigidbody>();
+                rb.useGravity = false;
+                Vector3 dir = new Vector3(x, y, z).normalized;
+                rb.linearVelocity = dir * Random.Range(3f, 7f)
+                    + Random.insideUnitSphere * 2f;
+                rb.angularVelocity = Random.insideUnitSphere * Random.Range(5f, 15f);
+
+                // Collider not needed for visual fragments
+                var col = frag.GetComponent<Collider>();
+                if (col != null) Destroy(col);
+
+                // Start fade+destroy coroutine on this CellView (fragments have no MonoBehaviour)
+                StartCoroutine(FadeAndDestroyFragment(fragRenderer, frag, 2f));
+            }
+        }
+
+        private IEnumerator FadeAndDestroyFragment(Renderer rend, GameObject obj, float lifetime)
+        {
+            var pb = new MaterialPropertyBlock();
+            float elapsed = 0f;
+            rend.GetPropertyBlock(pb);
+            Color baseColor = pb.GetColor("_BaseColor");
+
+            while (elapsed < lifetime)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / lifetime;
+                float alpha = 1f - t * t; // quadratic fade
+                float shrink = 1f - t;
+
+                Color c = baseColor;
+                c.a = alpha;
+                pb.SetColor("_BaseColor", c);
+                pb.SetColor("_Color", c);
+                rend.SetPropertyBlock(pb);
+                obj.transform.localScale = Vector3.one * (obj.transform.localScale.x > 0.01f
+                    ? Mathf.Lerp(obj.transform.localScale.x, 0f, t * t) : 0f);
+                yield return null;
+            }
+            Destroy(obj);
+        }
+
+        /// <summary>Clean up any leftover explosion fragments (call on board reset).</summary>
+        public static void CleanupFragments()
+        {
+            // Find by name since we can't use custom tags without registering them
+            foreach (var obj in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            {
+                if (obj != null && obj.name == FragmentTag)
+                    Destroy(obj.gameObject);
+            }
+        }
+
         // ----- Helpers -----
 
         private void SetLabelText(string text)

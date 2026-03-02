@@ -65,8 +65,113 @@ namespace Minesweeper3D.Unity
 
         public void PlayMineReveal()
         {
-            // Short harsh buzz
+            // Short harsh buzz (legacy, kept for non-spatial callers)
             PlayNoise(0.08f, 0.25f);
+        }
+
+        /// <summary>
+        /// Layered explosion: low boom + debris scatter + rumble tail.
+        /// Plays at a world position via a temporary spatial AudioSource.
+        /// </summary>
+        public void PlayExplosion(Vector3 worldPos)
+        {
+            // Layer 1: Low-frequency boom (60 Hz sine with fast decay, 0.3s)
+            var boom = GenerateExplosionBoom(0.35f);
+            // Layer 2: Debris scatter (filtered noise burst, 0.25s)
+            var debris = GenerateDebrisScatter(0.25f);
+            // Layer 3: Rumble tail (very low sine sweep 40→20 Hz, 0.6s)
+            var rumble = GenerateRumbleTail(0.6f);
+
+            PlaySpatialOneShot(worldPos, boom, 0.5f);
+            PlaySpatialOneShot(worldPos, debris, 0.3f);
+            PlaySpatialOneShot(worldPos, rumble, 0.35f);
+        }
+
+        private void PlaySpatialOneShot(Vector3 pos, AudioClip clip, float volume)
+        {
+            var obj = new GameObject("ExplosionAudio");
+            obj.transform.position = pos;
+            var src = obj.AddComponent<AudioSource>();
+            src.spatialBlend = 1f; // full 3D
+            src.rolloffMode = AudioRolloffMode.Linear;
+            src.minDistance = 2f;
+            src.maxDistance = 30f;
+            src.playOnAwake = false;
+            src.clip = clip;
+            src.volume = volume;
+            src.Play();
+            Destroy(obj, clip.length + 0.1f);
+        }
+
+        private static AudioClip GenerateExplosionBoom(float duration)
+        {
+            int sampleRate = 44100;
+            int count = (int)(sampleRate * duration);
+            var clip = AudioClip.Create("boom", count, 1, sampleRate, false);
+            float[] samples = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sampleRate;
+                float progress = (float)i / count;
+                // Frequency drops from 80 Hz to 40 Hz
+                float freq = Mathf.Lerp(80f, 40f, progress);
+                // Sharp exponential decay
+                float env = Mathf.Exp(-6f * progress);
+                samples[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * env;
+                // Add sub-harmonic punch
+                samples[i] += Mathf.Sin(2f * Mathf.PI * freq * 0.5f * t) * env * 0.5f;
+            }
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip GenerateDebrisScatter(float duration)
+        {
+            int sampleRate = 44100;
+            int count = (int)(sampleRate * duration);
+            var clip = AudioClip.Create("debris", count, 1, sampleRate, false);
+            float[] samples = new float[count];
+            // Use deterministic seed for consistency
+            var rng = new System.Random(99);
+            for (int i = 0; i < count; i++)
+            {
+                float progress = (float)i / count;
+                // Quick attack, medium decay
+                float env = progress < 0.05f
+                    ? progress / 0.05f
+                    : Mathf.Exp(-4f * (progress - 0.05f));
+                // Filtered noise: bias toward mid frequencies by averaging neighbors
+                float raw = (float)(rng.NextDouble() * 2.0 - 1.0);
+                samples[i] = raw * env * 0.6f;
+                // Simple low-pass: average with previous
+                if (i > 0)
+                    samples[i] = samples[i] * 0.4f + samples[i - 1] * 0.6f;
+            }
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip GenerateRumbleTail(float duration)
+        {
+            int sampleRate = 44100;
+            int count = (int)(sampleRate * duration);
+            var clip = AudioClip.Create("rumble", count, 1, sampleRate, false);
+            float[] samples = new float[count];
+            var rng = new System.Random(77);
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sampleRate;
+                float progress = (float)i / count;
+                // Sweep from 40 Hz down to 20 Hz
+                float freq = Mathf.Lerp(40f, 20f, progress);
+                float env = Mathf.Exp(-3f * progress);
+                float sine = Mathf.Sin(2f * Mathf.PI * freq * t) * env;
+                // Add subtle noise texture
+                float noise = (float)(rng.NextDouble() * 2.0 - 1.0) * env * 0.15f;
+                samples[i] = sine + noise;
+            }
+            clip.SetData(samples, 0);
+            return clip;
         }
 
         // ===== Haptics =====

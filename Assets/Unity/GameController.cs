@@ -163,8 +163,30 @@ namespace Minesweeper3D.Unity
                     _feedback?.PlayRevealCascade(Board.LastRevealed.Count);
                 if (rv == RevealResult.Mine)
                 {
-                    _feedback?.PlayMineReveal();
+                    // Explosion VFX on the detonated cell
+                    var mineCell = _sliceController.GetCell(coord);
+                    Vector3 minePos = mineCell.transform.position;
+                    mineCell.Explode();
+
+                    // Explode immediate neighbors too
+                    var dirs = new[] {
+                        new Coord3(1,0,0), new Coord3(-1,0,0),
+                        new Coord3(0,1,0), new Coord3(0,-1,0),
+                        new Coord3(0,0,1), new Coord3(0,0,-1)
+                    };
+                    foreach (var d in dirs)
+                    {
+                        var n = new Coord3(coord.X + d.X, coord.Y + d.Y, coord.Z + d.Z);
+                        if (Board.InBounds(n))
+                            _sliceController.GetCell(n).Explode();
+                    }
+
+                    // Layered spatial explosion sound
+                    _feedback?.PlayExplosion(minePos);
                     _feedback?.VibrateHeavy();
+
+                    // Camera shake
+                    _cameraController?.Shake(0.3f, 0.15f);
                 }
                 RefreshWithCascade();
                 PlayEndFeedback();
@@ -291,6 +313,9 @@ namespace Minesweeper3D.Unity
             IsCustomGame = true;
             gridSize = newGridSize;
             mineCount = newMineCount;
+
+            // Clean up explosion fragments
+            CellView.CleanupFragments();
 
             // Destroy old grid immediately so no leftover cells remain
             if (_sliceController != null)
