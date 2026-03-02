@@ -81,10 +81,69 @@ namespace Minesweeper3D.Unity
             var debris = GenerateDebrisScatter(0.25f);
             // Layer 3: Rumble tail (very low sine sweep 40→20 Hz, 0.6s)
             var rumble = GenerateRumbleTail(0.6f);
+            // Layer 4: High glass/crystal shatter
+            var shatter = GenerateGlassShatter(0.2f);
 
             PlaySpatialOneShot(worldPos, boom, 0.5f);
             PlaySpatialOneShot(worldPos, debris, 0.3f);
             PlaySpatialOneShot(worldPos, rumble, 0.35f);
+            PlaySpatialOneShot(worldPos, shatter, 0.25f);
+        }
+
+        /// <summary>Low bass rumble for charge-up phase. Plays on the main source.</summary>
+        public void PlayChargeRumble()
+        {
+            var clip = GenerateChargeRumble(0.25f);
+            _source.PlayOneShot(clip, 0.3f);
+        }
+
+        private static AudioClip GenerateChargeRumble(float duration)
+        {
+            int sampleRate = 44100;
+            int count = (int)(sampleRate * duration);
+            var clip = AudioClip.Create("chargeRumble", count, 1, sampleRate, false);
+            float[] samples = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sampleRate;
+                float progress = (float)i / count;
+                // Rising frequency 30→60 Hz with increasing amplitude
+                float freq = Mathf.Lerp(30f, 60f, progress);
+                float env = progress * progress; // quadratic rise
+                samples[i] = Mathf.Sin(2f * Mathf.PI * freq * t) * env * 0.8f;
+            }
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        private static AudioClip GenerateGlassShatter(float duration)
+        {
+            int sampleRate = 44100;
+            int count = (int)(sampleRate * duration);
+            var clip = AudioClip.Create("glassShatter", count, 1, sampleRate, false);
+            float[] samples = new float[count];
+            var rng = new System.Random(55);
+            for (int i = 0; i < count; i++)
+            {
+                float progress = (float)i / count;
+                float t = (float)i / sampleRate;
+                // Sharp attack, fast decay
+                float env = progress < 0.02f
+                    ? progress / 0.02f
+                    : Mathf.Exp(-10f * (progress - 0.02f));
+                // High-frequency noise (glass-like)
+                float raw = (float)(rng.NextDouble() * 2.0 - 1.0);
+                // High-pass bias: subtract low-frequency component
+                float hp = raw;
+                if (i > 0) hp = raw - samples[i - 1] * 0.3f;
+                // Add resonant high-frequency sine clusters
+                float ring = Mathf.Sin(2f * Mathf.PI * 4200f * t) * 0.3f
+                           + Mathf.Sin(2f * Mathf.PI * 6800f * t) * 0.2f
+                           + Mathf.Sin(2f * Mathf.PI * 9500f * t) * 0.1f;
+                samples[i] = (hp * 0.5f + ring) * env;
+            }
+            clip.SetData(samples, 0);
+            return clip;
         }
 
         private void PlaySpatialOneShot(Vector3 pos, AudioClip clip, float volume)

@@ -599,78 +599,163 @@ namespace Minesweeper3D.Unity
         // ----- Explosion VFX -----
 
         private static readonly string FragmentTag = "ExplosionFragment";
+        private static Mesh _fragmentMesh;
+
+        private static void EnsureFragmentMesh()
+        {
+            if (_fragmentMesh != null) return;
+            // Procedural unit cube mesh — no CreatePrimitive, no collider dependencies
+            _fragmentMesh = new Mesh { name = "Fragment" };
+            var v = new Vector3[]
+            {
+                // Front
+                new(-0.5f,-0.5f,-0.5f), new(-0.5f, 0.5f,-0.5f), new( 0.5f, 0.5f,-0.5f), new( 0.5f,-0.5f,-0.5f),
+                // Back
+                new( 0.5f,-0.5f, 0.5f), new( 0.5f, 0.5f, 0.5f), new(-0.5f, 0.5f, 0.5f), new(-0.5f,-0.5f, 0.5f),
+                // Top
+                new(-0.5f, 0.5f,-0.5f), new(-0.5f, 0.5f, 0.5f), new( 0.5f, 0.5f, 0.5f), new( 0.5f, 0.5f,-0.5f),
+                // Bottom
+                new(-0.5f,-0.5f, 0.5f), new(-0.5f,-0.5f,-0.5f), new( 0.5f,-0.5f,-0.5f), new( 0.5f,-0.5f, 0.5f),
+                // Left
+                new(-0.5f,-0.5f, 0.5f), new(-0.5f, 0.5f, 0.5f), new(-0.5f, 0.5f,-0.5f), new(-0.5f,-0.5f,-0.5f),
+                // Right
+                new( 0.5f,-0.5f,-0.5f), new( 0.5f, 0.5f,-0.5f), new( 0.5f, 0.5f, 0.5f), new( 0.5f,-0.5f, 0.5f),
+            };
+            var n = new Vector3[]
+            {
+                Vector3.back,Vector3.back,Vector3.back,Vector3.back,
+                Vector3.forward,Vector3.forward,Vector3.forward,Vector3.forward,
+                Vector3.up,Vector3.up,Vector3.up,Vector3.up,
+                Vector3.down,Vector3.down,Vector3.down,Vector3.down,
+                Vector3.left,Vector3.left,Vector3.left,Vector3.left,
+                Vector3.right,Vector3.right,Vector3.right,Vector3.right,
+            };
+            var t = new int[36];
+            for (int f = 0; f < 6; f++)
+            {
+                int b = f * 4; int i = f * 6;
+                t[i]=b; t[i+1]=b+1; t[i+2]=b+2;
+                t[i+3]=b; t[i+4]=b+2; t[i+5]=b+3;
+            }
+            _fragmentMesh.vertices = v;
+            _fragmentMesh.normals = n;
+            _fragmentMesh.triangles = t;
+            _fragmentMesh.RecalculateBounds();
+        }
+
+        /// <summary>Flash this cell red for the given duration (Step 1).</summary>
+        public void FlashRed(float duration)
+        {
+            StartCoroutine(FlashRedRoutine(duration));
+        }
+
+        private IEnumerator FlashRedRoutine(float duration)
+        {
+            ApplyColor(Color.red);
+            yield return new WaitForSecondsRealtime(duration);
+            // Restore — will be overwritten by charge or explode anyway
+        }
+
+        /// <summary>Glow white from center outward (Step 2).</summary>
+        public void ChargeGlow(float duration)
+        {
+            StartCoroutine(ChargeGlowRoutine(duration));
+        }
+
+        private IEnumerator ChargeGlowRoutine(float duration)
+        {
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                Color c = Color.Lerp(Color.red, Color.white, t);
+                ApplyColor(c);
+                float s = Mathf.Lerp(CubeScale, CubeScale * 1.15f, t);
+                transform.localScale = Vector3.one * s;
+                yield return null;
+            }
+            ApplyColor(Color.white);
+        }
 
         /// <summary>
         /// Fracture this cube into 8 sub-pieces that fly outward with physics.
-        /// The original cell renderer is hidden. Fragments auto-destroy after 2s.
+        /// Uses fully procedural mesh — no CreatePrimitive.
         /// </summary>
         public void Explode()
         {
+            Explode(Vector3.zero, 0f);
+        }
+
+        /// <summary>Explode with directional impulse from an epicenter.</summary>
+        public void Explode(Vector3 epicenter, float blastForce)
+        {
+            EnsureFragmentMesh();
             _renderer.enabled = false;
             _label.gameObject.SetActive(false);
             _labelShadow.gameObject.SetActive(false);
 
+            _renderer.GetPropertyBlock(_propBlock);
+            Color fragColor = _propBlock.GetColor("_BaseColor");
+
             float half = transform.localScale.x * 0.5f;
-            float fragScale = half; // each fragment is half the cube size
+            float fragScale = half;
 
             for (int x = -1; x <= 1; x += 2)
             for (int y = -1; y <= 1; y += 2)
             for (int z = -1; z <= 1; z += 2)
             {
-                var frag = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                frag.name = FragmentTag;
-                frag.tag = "Untagged";
+                var frag = new GameObject(FragmentTag);
                 frag.transform.position = transform.position
                     + new Vector3(x, y, z) * fragScale * 0.25f;
                 frag.transform.localScale = Vector3.one * fragScale;
 
-                // Copy material color
-                var fragRenderer = frag.GetComponent<Renderer>();
-                fragRenderer.sharedMaterial = _renderer.sharedMaterial;
+                var mf = frag.AddComponent<MeshFilter>();
+                mf.sharedMesh = _fragmentMesh;
+                var rend = frag.AddComponent<MeshRenderer>();
+                rend.sharedMaterial = _opaqueMat;
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 var pb = new MaterialPropertyBlock();
-                _renderer.GetPropertyBlock(_propBlock);
-                pb.SetColor("_BaseColor", _propBlock.GetColor("_BaseColor"));
-                pb.SetColor("_Color", _propBlock.GetColor("_Color"));
-                fragRenderer.SetPropertyBlock(pb);
+                pb.SetColor("_BaseColor", fragColor);
+                pb.SetColor("_Color", fragColor);
+                rend.SetPropertyBlock(pb);
 
-                // Physics
                 var rb = frag.AddComponent<Rigidbody>();
                 rb.useGravity = false;
                 Vector3 dir = new Vector3(x, y, z).normalized;
-                rb.linearVelocity = dir * Random.Range(3f, 7f)
-                    + Random.insideUnitSphere * 2f;
+                Vector3 baseVel = dir * Random.Range(3f, 7f) + Random.insideUnitSphere * 2f;
+                // Add directional blast if epicenter provided
+                if (blastForce > 0f)
+                {
+                    Vector3 away = (frag.transform.position - epicenter).normalized;
+                    baseVel += away * blastForce;
+                }
+                rb.linearVelocity = baseVel;
                 rb.angularVelocity = Random.insideUnitSphere * Random.Range(5f, 15f);
 
-                // Collider not needed for visual fragments
-                var col = frag.GetComponent<Collider>();
-                if (col != null) Destroy(col);
-
-                // Start fade+destroy coroutine on this CellView (fragments have no MonoBehaviour)
-                StartCoroutine(FadeAndDestroyFragment(fragRenderer, frag, 2f));
+                StartCoroutine(FadeAndDestroyFragment(rend, frag, 1.5f));
             }
         }
 
         private IEnumerator FadeAndDestroyFragment(Renderer rend, GameObject obj, float lifetime)
         {
             var pb = new MaterialPropertyBlock();
-            float elapsed = 0f;
             rend.GetPropertyBlock(pb);
             Color baseColor = pb.GetColor("_BaseColor");
+            float startScale = obj.transform.localScale.x;
+            float elapsed = 0f;
 
             while (elapsed < lifetime)
             {
                 elapsed += Time.deltaTime;
                 float t = elapsed / lifetime;
-                float alpha = 1f - t * t; // quadratic fade
-                float shrink = 1f - t;
-
+                float alpha = 1f - t * t;
                 Color c = baseColor;
                 c.a = alpha;
                 pb.SetColor("_BaseColor", c);
                 pb.SetColor("_Color", c);
                 rend.SetPropertyBlock(pb);
-                obj.transform.localScale = Vector3.one * (obj.transform.localScale.x > 0.01f
-                    ? Mathf.Lerp(obj.transform.localScale.x, 0f, t * t) : 0f);
+                obj.transform.localScale = Vector3.one * Mathf.Lerp(startScale, 0f, t * t);
                 yield return null;
             }
             Destroy(obj);
@@ -679,7 +764,6 @@ namespace Minesweeper3D.Unity
         /// <summary>Clean up any leftover explosion fragments (call on board reset).</summary>
         public static void CleanupFragments()
         {
-            // Find by name since we can't use custom tags without registering them
             foreach (var obj in FindObjectsByType<Transform>(FindObjectsSortMode.None))
             {
                 if (obj != null && obj.name == FragmentTag)

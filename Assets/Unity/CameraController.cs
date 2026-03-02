@@ -110,6 +110,34 @@ namespace Minesweeper3D.Unity
             _shakeCoroutine = null;
         }
 
+        // ----- Camera Pullback -----
+
+        private Coroutine _pullbackCoroutine;
+
+        /// <summary>Pull camera back by deltaDistance over duration seconds.</summary>
+        public void Pullback(float deltaDistance = 2f, float duration = 0.3f)
+        {
+            if (_pullbackCoroutine != null) StopCoroutine(_pullbackCoroutine);
+            _pullbackCoroutine = StartCoroutine(PullbackRoutine(deltaDistance, duration));
+        }
+
+        private IEnumerator PullbackRoutine(float delta, float duration)
+        {
+            float start = _distance;
+            float target = Mathf.Clamp(start + delta, minDistance, maxDistance);
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float eased = 1f - (1f - t) * (1f - t);
+                _distance = Mathf.Lerp(start, target, eased);
+                yield return null;
+            }
+            _distance = target;
+            _pullbackCoroutine = null;
+        }
+
         private void ApplyPosition()
         {
             float azRad = _azimuth * Mathf.Deg2Rad;

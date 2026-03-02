@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using Minesweeper3D.Core;
 
@@ -163,30 +164,8 @@ namespace Minesweeper3D.Unity
                     _feedback?.PlayRevealCascade(Board.LastRevealed.Count);
                 if (rv == RevealResult.Mine)
                 {
-                    // Explosion VFX on the detonated cell
-                    var mineCell = _sliceController.GetCell(coord);
-                    Vector3 minePos = mineCell.transform.position;
-                    mineCell.Explode();
-
-                    // Explode immediate neighbors too
-                    var dirs = new[] {
-                        new Coord3(1,0,0), new Coord3(-1,0,0),
-                        new Coord3(0,1,0), new Coord3(0,-1,0),
-                        new Coord3(0,0,1), new Coord3(0,0,-1)
-                    };
-                    foreach (var d in dirs)
-                    {
-                        var n = new Coord3(coord.X + d.X, coord.Y + d.Y, coord.Z + d.Z);
-                        if (Board.InBounds(n))
-                            _sliceController.GetCell(n).Explode();
-                    }
-
-                    // Layered spatial explosion sound
-                    _feedback?.PlayExplosion(minePos);
-                    _feedback?.VibrateHeavy();
-
-                    // Camera shake
-                    _cameraController?.Shake(0.3f, 0.15f);
+                    StartCoroutine(MineExplosionSequence(coord));
+                    return; // sequence handles refresh + feedback internally
                 }
                 RefreshWithCascade();
                 PlayEndFeedback();
@@ -343,6 +322,69 @@ namespace Minesweeper3D.Unity
             _highlightController?.Rebind(_sliceController);
             _highlightController?.ClearCache();
             RefreshUI();
+        }
+
+        // --- Mine explosion cinematic sequence ---
+
+        private IEnumerator MineExplosionSequence(Coord3 coord)
+        {
+            var mineCell = _sliceController.GetCell(coord);
+            Vector3 epicenter = mineCell.transform.position;
+
+            // Step 1: FLASH — clicked mine flashes red (100ms)
+            mineCell.FlashRed(0.1f);
+            yield return new WaitForSecondsRealtime(0.1f);
+
+            // Step 2: CHARGE — slow-motion, mine glows white, bass rumble
+            Time.timeScale = 0.3f;
+            _feedback?.PlayChargeRumble();
+            mineCell.ChargeGlow(0.2f);
+            yield return new WaitForSecondsRealtime(0.2f);
+
+            // Step 3: EXPLOSION — snap back to real-time
+            Time.timeScale = 1f;
+
+            // Explode the mine cell itself
+            _feedback?.PlayExplosion(epicenter);
+            mineCell.Explode(epicenter, 5f);
+
+            // Camera shake + pullback
+            _cameraController?.Shake(0.4f, 0.2f);
+            _cameraController?.Pullback(2f, 0.4f);
+            _feedback?.VibrateMedium();
+
+            // Explode neighboring cubes with staggered delay
+            var neighbors = Board.GetNeighbors(coord);
+            float stagger = 0.03f;
+            for (int i = 0; i < neighbors.Count; i++)
+            {
+                var n = neighbors[i];
+                var neighborCell = _sliceController.GetCell(n);
+                if (neighborCell != null)
+                {
+                    float dist = Vector3.Distance(epicenter, neighborCell.transform.position);
+                    float force = Mathf.Max(1f, 5f - dist);
+                    neighborCell.Explode(epicenter, force);
+                }
+                if (i < neighbors.Count - 1 && stagger > 0f)
+                    yield return new WaitForSecondsRealtime(stagger);
+            }
+
+            // Step 4: DISSOLVE — wait for fragments to fade, then show game over
+            // Refresh all remaining cells to show revealed mines
+            _timer.StopTimer();
+            _sliceController.RefreshAll();
+            _highlightController?.RefreshCrossSliceIndicators();
+            _hudController?.Refresh();
+
+            // Play lose sound
+            _feedback?.PlayLose();
+
+            // Wait for fragments to dissolve before game-over UI settles
+            yield return new WaitForSecondsRealtime(1.2f);
+
+            // Final HUD refresh for game-over state
+            _hudController?.Refresh();
         }
 
         private void PlayEndFeedback()
