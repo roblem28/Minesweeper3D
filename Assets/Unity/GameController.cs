@@ -353,35 +353,60 @@ namespace Minesweeper3D.Unity
             _feedback?.PlayExplosion(epicenter);
             mineCell.Explode(epicenter, 5f);
 
-            // Camera shake + pullback
+            // Camera shake + pullback (50% further than original)
             _cameraController?.Shake(0.4f, 0.2f);
-            _cameraController?.Pullback(2f, 0.4f);
+            _cameraController?.Pullback(3f, 0.4f);
             _feedback?.VibrateMedium();
 
-            // Explode neighboring cubes with staggered delay
-            var neighbors = Board.GetNeighbors(coord);
-            float stagger = 0.03f;
-            for (int i = 0; i < neighbors.Count; i++)
+            // Explode ALL cubes on the board, staggered by distance from mine
+            int size = _sliceController.Size;
+            float maxDist = 0f;
+
+            // First pass: find max distance for delay normalization
+            for (int z = 0; z < size; z++)
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
             {
-                var n = neighbors[i];
-                var neighborCell = _sliceController.GetCell(n);
-                if (neighborCell != null)
-                {
-                    float dist = Vector3.Distance(epicenter, neighborCell.transform.position);
-                    float force = Mathf.Max(1f, 5f - dist);
-                    neighborCell.Explode(epicenter, force);
-                }
-                if (i < neighbors.Count - 1 && stagger > 0f)
-                    yield return new WaitForSecondsRealtime(stagger);
+                var cell = _sliceController.GetCell(new Coord3(x, y, z));
+                if (cell == null || cell == mineCell) continue;
+                float d = Vector3.Distance(epicenter, cell.transform.position);
+                if (d > maxDist) maxDist = d;
+            }
+
+            // Build list of (cell, distance) sorted by distance for staggered detonation
+            var cellsByDist = new System.Collections.Generic.List<(CellView cell, float dist)>();
+            for (int z = 0; z < size; z++)
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var cell = _sliceController.GetCell(new Coord3(x, y, z));
+                if (cell == null || cell == mineCell) continue;
+                float d = Vector3.Distance(epicenter, cell.transform.position);
+                cellsByDist.Add((cell, d));
+            }
+            cellsByDist.Sort((a, b) => a.dist.CompareTo(b.dist));
+
+            // Second pass: explode each cell with distance-based delay and force
+            float prevDelay = 0f;
+            foreach (var (cell, dist) in cellsByDist)
+            {
+                // Delay: 50ms adjacent → 300ms far, scaled by normalized distance
+                float t = maxDist > 0f ? dist / maxDist : 0f;
+                float delay = Mathf.Lerp(0.05f, 0.3f, t);
+
+                // Wait the incremental time since the last detonation
+                float wait = delay - prevDelay;
+                if (wait > 0.001f)
+                    yield return new WaitForSecondsRealtime(wait);
+                prevDelay = delay;
+
+                // Force: closer cubes fly harder (5→1), far cubes tumble gently
+                float force = Mathf.Lerp(5f, 1f, t);
+                cell.Explode(epicenter, force);
             }
 
             // Step 4: DISSOLVE — wait for fragments to fade, then show game over
             _timer.StopTimer();
-
-            // Show revealed mines on remaining cells, but do NOT refresh HUD yet
-            // (HUD refresh triggers the Game Over panel)
-            _sliceController.RefreshAll();
-            _highlightController?.RefreshCrossSliceIndicators();
 
             // Play lose sound
             _feedback?.PlayLose();
