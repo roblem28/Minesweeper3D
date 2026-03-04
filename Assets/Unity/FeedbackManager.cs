@@ -48,11 +48,23 @@ namespace Minesweeper3D.Unity
 
         public void PlayWin()
         {
-            // Major chord arpeggio: C5 E5 G5 C6
-            PlayToneDelayed(523f, 0.15f, 0.25f, 0.0f);
-            PlayToneDelayed(659f, 0.15f, 0.25f, 0.12f);
-            PlayToneDelayed(784f, 0.15f, 0.25f, 0.24f);
-            PlayToneDelayed(1047f, 0.25f, 0.3f, 0.36f);
+            PlayWinChime();
+        }
+
+        /// <summary>
+        /// Harmonic chime: C5, E5, G5 at 80ms intervals with 0.8s decay,
+        /// plus a low 130Hz swell underneath.
+        /// </summary>
+        public void PlayWinChime()
+        {
+            // Chime tones — longer decay for shimmer
+            PlayToneDelayed(523f, 0.8f, 0.3f, 0.0f);   // C5
+            PlayToneDelayed(659f, 0.8f, 0.3f, 0.08f);  // E5
+            PlayToneDelayed(784f, 0.8f, 0.3f, 0.16f);  // G5
+
+            // Low swell underneath
+            var swell = GenerateLowSwell();
+            _source.PlayOneShot(swell, 0.25f);
         }
 
         public void PlayLose()
@@ -306,6 +318,44 @@ namespace Minesweeper3D.Unity
 #endif
         }
 
+        public void VibrateWin()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            VibrateWinAndroid();
+#endif
+        }
+
+        // ===== Win Sound Generation =====
+
+        private static AudioClip GenerateLowSwell()
+        {
+            int sampleRate = 44100;
+            float duration = 1.5f;
+            int count = (int)(sampleRate * duration);
+            var clip = AudioClip.Create("lowSwell", count, 1, sampleRate, false);
+            float[] samples = new float[count];
+            float attackDuration = 0.3f;
+            int attackSamples = (int)(sampleRate * attackDuration);
+            for (int i = 0; i < count; i++)
+            {
+                float t = (float)i / sampleRate;
+                float progress = (float)i / count;
+                // 0.3s attack ramp, then smooth decay
+                float env;
+                if (i < attackSamples)
+                    env = (float)i / attackSamples;
+                else
+                    env = Mathf.Exp(-2f * (progress - attackDuration / duration));
+                // 130Hz sine
+                float sine = Mathf.Sin(2f * Mathf.PI * 130f * t);
+                // Subtle second harmonic for warmth
+                float harmonic = Mathf.Sin(2f * Mathf.PI * 260f * t) * 0.15f;
+                samples[i] = (sine + harmonic) * env * 0.5f;
+            }
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
         // ===== Audio Generation =====
 
         private void PlayTone(float frequency, float duration, float volume, float sweep = 1f)
@@ -441,6 +491,36 @@ namespace Minesweeper3D.Unity
                     else
                     {
                         vibrator.Call("vibrate", (long)100);
+                    }
+                }
+            }
+            catch (System.Exception) { }
+        }
+
+        private static void VibrateWinAndroid()
+        {
+            try
+            {
+                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var vibrator = activity.Call<AndroidJavaObject>("getSystemService", "vibrator"))
+                {
+                    if (vibrator == null) return;
+
+                    if (GetApiLevel() >= 26)
+                    {
+                        long[] timings = { 0, 30, 20, 30, 20, 30 };
+                        int[] amplitudes = { 0, 120, 0, 120, 0, 120 };
+                        using (var effectClass = new AndroidJavaClass("android.os.VibrationEffect"))
+                        using (var effect = effectClass.CallStatic<AndroidJavaObject>(
+                            "createWaveform", timings, amplitudes, -1))
+                        {
+                            vibrator.Call("vibrate", effect);
+                        }
+                    }
+                    else
+                    {
+                        vibrator.Call("vibrate", new long[] { 0, 30, 20, 30, 20, 30 }, -1);
                     }
                 }
             }

@@ -36,6 +36,7 @@ namespace Minesweeper3D.Unity
         private TimerController _timer;
         private FeedbackManager _feedback;
         private bool _firstClick = true;
+        private bool _winSequencePlaying;
 
         public TimerController Timer => _timer;
         public SliceController Slice => _sliceController;
@@ -126,6 +127,9 @@ namespace Minesweeper3D.Unity
             _inputManager.OnDoubleClick += HandleChord;
             _inputManager.OnDoubleTap += HandleChord;
 
+            // Pre-warm fragment pool (512 = 64 cells × 8 fragments each)
+            CellView.WarmFragmentPool(512);
+
             Debug.Log($"[MineSweeper3D] Started — {gridSize}^3 grid, {mineCount} mines");
         }
 
@@ -133,6 +137,7 @@ namespace Minesweeper3D.Unity
         {
             if (Board != null && Board.Status != GameStatus.Playing)
                 return;
+            if (_winSequencePlaying) return;
 
             // Flag mode redirect: when flag toggle is active, taps become flags
             if (_hudController != null && _hudController.IsFlagMode)
@@ -153,6 +158,11 @@ namespace Minesweeper3D.Unity
                 int cascadeCount = Board.LastRevealed.Count;
                 if (cascadeCount > 1) _feedback?.PlayRevealCascade(cascadeCount);
                 RefreshWithCascade();
+                if (Board.Status == GameStatus.Won)
+                {
+                    StartCoroutine(WinCelebrationSequence());
+                    return;
+                }
                 PlayEndFeedback();
                 return;
             }
@@ -173,6 +183,11 @@ namespace Minesweeper3D.Unity
                     return; // sequence handles refresh + feedback internally
                 }
                 RefreshWithCascade();
+                if (Board.Status == GameStatus.Won)
+                {
+                    StartCoroutine(WinCelebrationSequence());
+                    return;
+                }
                 PlayEndFeedback();
             }
         }
@@ -181,6 +196,7 @@ namespace Minesweeper3D.Unity
         {
             if (Board == null || Board.Status != GameStatus.Playing)
                 return;
+            if (_winSequencePlaying) return;
 
             if (Board.ToggleFlag(coord))
             {
@@ -191,6 +207,11 @@ namespace Minesweeper3D.Unity
                     _feedback?.PlayUnflag();
                 _feedback?.VibrateLight();
                 RefreshUI();
+                if (Board.Status == GameStatus.Won)
+                {
+                    StartCoroutine(WinCelebrationSequence());
+                    return;
+                }
                 PlayEndFeedback();
             }
         }
@@ -297,6 +318,14 @@ namespace Minesweeper3D.Unity
             IsCustomGame = true;
             gridSize = newGridSize;
             mineCount = newMineCount;
+
+            // Clean up win sequence state
+            _winSequencePlaying = false;
+            StopAllCoroutines();
+
+            // Reset grid position (may have been lifted by win sequence)
+            if (_sliceController != null)
+                _sliceController.transform.position = Vector3.zero;
 
             // Clean up explosion fragments
             CellView.CleanupFragments();
@@ -415,6 +444,105 @@ namespace Minesweeper3D.Unity
             yield return new WaitForSecondsRealtime(1.5f);
 
             // Now show Game Over — HUD Refresh triggers ShowEndPanel
+            _hudController?.Refresh();
+        }
+
+        // --- Win celebration cinematic sequence ---
+
+        private IEnumerator WinCelebrationSequence()
+        {
+            _winSequencePlaying = true;
+
+            // Step 1: LOCK — stop timer, auto-reveal remaining hidden cubes
+            _timer.StopTimer();
+
+            int size = _sliceController.Size;
+            var hiddenCells = new System.Collections.Generic.List<(CellView cell, Coord3 coord)>();
+            for (int z = 0; z < size; z++)
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var c = new Coord3(x, y, z);
+                if (Board.GetState(c) == CellState.Hidden && !Board.IsMine(c))
+                {
+                    var cell = _sliceController.GetCell(c);
+                    if (cell != null)
+                        hiddenCells.Add((cell, c));
+                }
+            }
+
+            // Stagger auto-reveal at 20ms per cell
+            float revealDelay = 0f;
+            foreach (var (cell, coord) in hiddenCells)
+            {
+                int count = Board.GetCount(coord);
+                cell.PlayRevealAnimation(revealDelay, count);
+                revealDelay += 0.02f;
+            }
+            // Wait for all reveals to finish (stagger + animation time)
+            float revealWait = Mathf.Max(0.4f, revealDelay + 0.2f);
+            yield return new WaitForSecondsRealtime(revealWait);
+
+            // Step 4: SOUND + HAPTIC (fires at ~0.4s, overlaps with glow start)
+            _feedback?.PlayWinChime();
+            _feedback?.VibrateWin();
+
+            // Step 2: GLOW — emission wave traveling outward from last revealed cell
+            Coord3 origin;
+            var lastRevealed = Board.LastRevealed;
+            if (lastRevealed != null && lastRevealed.Count > 0)
+                origin = lastRevealed[lastRevealed.Count - 1];
+            else
+                origin = new Coord3(size / 2, size / 2, size / 2);
+
+            Vector3 originPos = _sliceController.GetCell(origin).transform.position;
+
+            var glowCells = new System.Collections.Generic.List<(CellView cell, float dist)>();
+            for (int z = 0; z < size; z++)
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var cell = _sliceController.GetCell(new Coord3(x, y, z));
+                if (cell == null) continue;
+                // Only glow visible cells (renderer enabled)
+                if (!cell.gameObject.activeInHierarchy) continue;
+                float d = Vector3.Distance(originPos, cell.transform.position);
+                glowCells.Add((cell, d));
+            }
+            glowCells.Sort((a, b) => a.dist.CompareTo(b.dist));
+
+            float maxGlowDist = glowCells.Count > 0 ? glowCells[glowCells.Count - 1].dist : 1f;
+            foreach (var (cell, dist) in glowCells)
+            {
+                float t = maxGlowDist > 0f ? dist / maxGlowDist : 0f;
+                float delay = t * 0.4f; // spread over 0.4s
+                cell.PulseGlow(delay);
+            }
+
+            // Step 3: LIFT — float up 0.3 units + scale pulse (overlaps glow)
+            yield return new WaitForSecondsRealtime(0.2f); // slight delay into glow
+            float liftDuration = 0.5f;
+            float liftElapsed = 0f;
+            Vector3 startPos = _sliceController.transform.position;
+            Vector3 endPos = startPos + Vector3.up * 0.3f;
+            Vector3 startScale = _sliceController.transform.localScale;
+            while (liftElapsed < liftDuration)
+            {
+                liftElapsed += Time.unscaledDeltaTime;
+                float lt = Mathf.Clamp01(liftElapsed / liftDuration);
+                // Ease-out for position
+                float eased = 1f - (1f - lt) * (1f - lt);
+                _sliceController.transform.position = Vector3.Lerp(startPos, endPos, eased);
+                // Scale pulse: 1.0 → 1.03 → 1.0 (ease-in-out)
+                float scalePulse = 1f + 0.03f * Mathf.Sin(lt * Mathf.PI);
+                _sliceController.transform.localScale = startScale * scalePulse;
+                yield return null;
+            }
+            _sliceController.transform.position = endPos;
+            _sliceController.transform.localScale = startScale;
+
+            // Step 5: UI — show win panel after sequence completes
+            yield return new WaitForSecondsRealtime(0.3f);
             _hudController?.Refresh();
         }
 

@@ -85,6 +85,9 @@ namespace Minesweeper3D.Unity
         {
             _opaqueMat = opaque;
             _ghostMat = ghost;
+            // Enable GPU instancing for better batching of cubes and fragments
+            if (_opaqueMat != null) _opaqueMat.enableInstancing = true;
+            if (_ghostMat != null) _ghostMat.enableInstancing = true;
         }
 
         public void Init(int x, int y, int z)
@@ -162,6 +165,10 @@ namespace Minesweeper3D.Unity
 
         }
 
+        // --- Flag label colors ---
+        private static readonly Color FlagLabelColor = new Color(1f, 0.843f, 0f, 1f);        // #FFD700 yellow
+        private static readonly Color FlagShadowColor = new Color(0.545f, 0.412f, 0.078f, 0.45f); // #8B6914
+
         /// <summary>Switch between opaque cube (active) and wireframe (ghost) rendering.</summary>
         public void SetActiveSlice(bool active)
         {
@@ -199,6 +206,8 @@ namespace Minesweeper3D.Unity
             _label.gameObject.SetActive(true);
             _labelShadow.gameObject.SetActive(true);
             SetLabelText("");
+            _label.characterSize = 0.315f;
+            _labelShadow.characterSize = 0.315f;
             ClearEmission();
 
             // Game over: expose unflagged mines
@@ -229,8 +238,11 @@ namespace Minesweeper3D.Unity
                     ApplyColor(ActiveFlagged);
                     SetScale(CubeScale);
                     _targetScale = CubeScale;
-                    SetLabelText("F");
-                    _label.color = Color.white;
+                    SetLabelText("\u2691"); // ⚑ BLACK FLAG
+                    _label.characterSize = 0.157f;
+                    _labelShadow.characterSize = 0.157f;
+                    _label.color = FlagLabelColor;
+                    _labelShadow.color = FlagShadowColor;
                     break;
 
                 case CellState.Revealed:
@@ -600,29 +612,26 @@ namespace Minesweeper3D.Unity
                 _crossSliceMarker.gameObject.SetActive(false);
         }
 
-        // ----- Explosion VFX -----
+        // ----- Explosion VFX (pooled fragments) -----
 
-        private static readonly string FragmentTag = "ExplosionFragment";
         private static Mesh _fragmentMesh;
+        // Pool: pre-allocated fragment GameObjects reused across explosions
+        private static readonly System.Collections.Generic.List<GameObject> _fragmentPool
+            = new System.Collections.Generic.List<GameObject>(512);
+        private static int _fragmentPoolCursor;
+        private static Transform _fragmentPoolRoot;
 
         private static void EnsureFragmentMesh()
         {
             if (_fragmentMesh != null) return;
-            // Procedural unit cube mesh — no CreatePrimitive, no collider dependencies
             _fragmentMesh = new Mesh { name = "Fragment" };
             var v = new Vector3[]
             {
-                // Front
                 new(-0.5f,-0.5f,-0.5f), new(-0.5f, 0.5f,-0.5f), new( 0.5f, 0.5f,-0.5f), new( 0.5f,-0.5f,-0.5f),
-                // Back
                 new( 0.5f,-0.5f, 0.5f), new( 0.5f, 0.5f, 0.5f), new(-0.5f, 0.5f, 0.5f), new(-0.5f,-0.5f, 0.5f),
-                // Top
                 new(-0.5f, 0.5f,-0.5f), new(-0.5f, 0.5f, 0.5f), new( 0.5f, 0.5f, 0.5f), new( 0.5f, 0.5f,-0.5f),
-                // Bottom
                 new(-0.5f,-0.5f, 0.5f), new(-0.5f,-0.5f,-0.5f), new( 0.5f,-0.5f,-0.5f), new( 0.5f,-0.5f, 0.5f),
-                // Left
                 new(-0.5f,-0.5f, 0.5f), new(-0.5f, 0.5f, 0.5f), new(-0.5f, 0.5f,-0.5f), new(-0.5f,-0.5f,-0.5f),
-                // Right
                 new( 0.5f,-0.5f,-0.5f), new( 0.5f, 0.5f,-0.5f), new( 0.5f, 0.5f, 0.5f), new( 0.5f,-0.5f, 0.5f),
             };
             var n = new Vector3[]
@@ -645,6 +654,65 @@ namespace Minesweeper3D.Unity
             _fragmentMesh.normals = n;
             _fragmentMesh.triangles = t;
             _fragmentMesh.RecalculateBounds();
+        }
+
+        /// <summary>Pre-warm fragment pool. Call once at startup or before first explosion.</summary>
+        public static void WarmFragmentPool(int count)
+        {
+            EnsureFragmentMesh();
+            if (_fragmentPoolRoot == null)
+            {
+                var rootObj = new GameObject("FragmentPool");
+                Object.DontDestroyOnLoad(rootObj);
+                _fragmentPoolRoot = rootObj.transform;
+            }
+            for (int i = _fragmentPool.Count; i < count; i++)
+            {
+                var frag = CreateFragmentObject();
+                frag.SetActive(false);
+                _fragmentPool.Add(frag);
+            }
+        }
+
+        private static GameObject CreateFragmentObject()
+        {
+            var frag = new GameObject("Frag");
+            frag.transform.SetParent(_fragmentPoolRoot);
+            frag.AddComponent<MeshFilter>().sharedMesh = _fragmentMesh;
+            var rend = frag.AddComponent<MeshRenderer>();
+            rend.sharedMaterial = _opaqueMat;
+            rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            frag.AddComponent<Rigidbody>().useGravity = false;
+            return frag;
+        }
+
+        private static GameObject RentFragment()
+        {
+            // Scan pool for an inactive fragment
+            for (int i = 0; i < _fragmentPool.Count; i++)
+            {
+                int idx = (_fragmentPoolCursor + i) % _fragmentPool.Count;
+                var frag = _fragmentPool[idx];
+                if (frag != null && !frag.activeSelf)
+                {
+                    _fragmentPoolCursor = (idx + 1) % _fragmentPool.Count;
+                    frag.SetActive(true);
+                    return frag;
+                }
+            }
+            // Pool exhausted — grow
+            var newFrag = CreateFragmentObject();
+            _fragmentPool.Add(newFrag);
+            return newFrag;
+        }
+
+        private static void ReturnFragment(GameObject frag)
+        {
+            if (frag == null) return;
+            frag.SetActive(false);
+            var rb = frag.GetComponent<Rigidbody>();
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
         }
 
         /// <summary>Flash this cell red for the given duration (Step 1).</summary>
@@ -691,10 +759,11 @@ namespace Minesweeper3D.Unity
             Explode(Vector3.zero, 0f);
         }
 
-        /// <summary>Explode with directional impulse from an epicenter.</summary>
+        /// <summary>Explode with directional impulse from an epicenter. Uses pooled fragments.</summary>
         public void Explode(Vector3 epicenter, float blastForce)
         {
             EnsureFragmentMesh();
+            WarmFragmentPool(512); // ensure pool is ready (no-op if already warm)
             _renderer.enabled = false;
             _label.gameObject.SetActive(false);
             _labelShadow.gameObject.SetActive(false);
@@ -704,31 +773,27 @@ namespace Minesweeper3D.Unity
 
             float half = transform.localScale.x * 0.5f;
             float fragScale = half;
+            // Reuse single PropertyBlock for all 8 fragments (same color)
+            var pb = new MaterialPropertyBlock();
+            pb.SetColor("_BaseColor", fragColor);
+            pb.SetColor("_Color", fragColor);
 
             for (int x = -1; x <= 1; x += 2)
             for (int y = -1; y <= 1; y += 2)
             for (int z = -1; z <= 1; z += 2)
             {
-                var frag = new GameObject(FragmentTag);
+                var frag = RentFragment();
+                frag.transform.SetParent(null);
                 frag.transform.position = transform.position
                     + new Vector3(x, y, z) * fragScale * 0.25f;
                 frag.transform.localScale = Vector3.one * fragScale;
+                frag.transform.rotation = Quaternion.identity;
 
-                var mf = frag.AddComponent<MeshFilter>();
-                mf.sharedMesh = _fragmentMesh;
-                var rend = frag.AddComponent<MeshRenderer>();
-                rend.sharedMaterial = _opaqueMat;
-                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                var pb = new MaterialPropertyBlock();
-                pb.SetColor("_BaseColor", fragColor);
-                pb.SetColor("_Color", fragColor);
-                rend.SetPropertyBlock(pb);
+                frag.GetComponent<MeshRenderer>().SetPropertyBlock(pb);
 
-                var rb = frag.AddComponent<Rigidbody>();
-                rb.useGravity = false;
+                var rb = frag.GetComponent<Rigidbody>();
                 Vector3 dir = new Vector3(x, y, z).normalized;
                 Vector3 baseVel = dir * Random.Range(3f, 7f) + Random.insideUnitSphere * 2f;
-                // Add directional blast if epicenter provided
                 if (blastForce > 0f)
                 {
                     Vector3 away = (frag.transform.position - epicenter).normalized;
@@ -737,41 +802,42 @@ namespace Minesweeper3D.Unity
                 rb.linearVelocity = baseVel;
                 rb.angularVelocity = Random.insideUnitSphere * Random.Range(5f, 15f);
 
-                StartCoroutine(FadeAndDestroyFragment(rend, frag, 1.5f));
+                StartCoroutine(FadeAndReturnFragment(frag, fragColor, 1.5f));
             }
         }
 
-        private IEnumerator FadeAndDestroyFragment(Renderer rend, GameObject obj, float lifetime)
+        private static readonly MaterialPropertyBlock _fadePB = new MaterialPropertyBlock();
+
+        private IEnumerator FadeAndReturnFragment(GameObject obj, Color baseColor, float lifetime)
         {
-            var pb = new MaterialPropertyBlock();
-            rend.GetPropertyBlock(pb);
-            Color baseColor = pb.GetColor("_BaseColor");
+            var rend = obj.GetComponent<MeshRenderer>();
             float startScale = obj.transform.localScale.x;
             float elapsed = 0f;
 
-            while (elapsed < lifetime)
+            while (elapsed < lifetime && obj.activeSelf)
             {
                 elapsed += Time.deltaTime;
                 float t = elapsed / lifetime;
                 float alpha = 1f - t * t;
                 Color c = baseColor;
                 c.a = alpha;
-                pb.SetColor("_BaseColor", c);
-                pb.SetColor("_Color", c);
-                rend.SetPropertyBlock(pb);
+                _fadePB.SetColor("_BaseColor", c);
+                _fadePB.SetColor("_Color", c);
+                rend.SetPropertyBlock(_fadePB);
                 obj.transform.localScale = Vector3.one * Mathf.Lerp(startScale, 0f, t * t);
                 yield return null;
             }
-            Destroy(obj);
+            ReturnFragment(obj);
         }
 
-        /// <summary>Clean up any leftover explosion fragments (call on board reset).</summary>
+        /// <summary>Return all active fragments to pool (call on board reset).</summary>
         public static void CleanupFragments()
         {
-            foreach (var obj in FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            for (int i = 0; i < _fragmentPool.Count; i++)
             {
-                if (obj != null && obj.name == FragmentTag)
-                    Destroy(obj.gameObject);
+                var frag = _fragmentPool[i];
+                if (frag != null && frag.activeSelf)
+                    ReturnFragment(frag);
             }
         }
 
@@ -801,6 +867,43 @@ namespace Minesweeper3D.Unity
         {
             _propBlock.SetColor("_EmissionColor", Color.black);
             _renderer.SetPropertyBlock(_propBlock);
+        }
+
+        // ----- Win glow pulse -----
+
+        private static readonly Color WinGlowColor = new Color(0.533f, 0.733f, 1f) * 0.4f; // #88BBFF * 0.4 intensity
+
+        public void PulseGlow(float delay)
+        {
+            StartCoroutine(PulseGlowRoutine(delay));
+        }
+
+        private IEnumerator PulseGlowRoutine(float delay)
+        {
+            if (delay > 0f) yield return new WaitForSecondsRealtime(delay);
+            // Ramp up 0.15s
+            float elapsed = 0f;
+            while (elapsed < 0.15f)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / 0.15f);
+                _propBlock.SetColor("_EmissionColor", WinGlowColor * t);
+                _renderer.SetPropertyBlock(_propBlock);
+                yield return null;
+            }
+            // Hold 0.1s
+            yield return new WaitForSecondsRealtime(0.1f);
+            // Fade 0.2s
+            elapsed = 0f;
+            while (elapsed < 0.2f)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = 1f - Mathf.Clamp01(elapsed / 0.2f);
+                _propBlock.SetColor("_EmissionColor", WinGlowColor * t);
+                _renderer.SetPropertyBlock(_propBlock);
+                yield return null;
+            }
+            ClearEmission();
         }
 
         private void SetScale(float s)
